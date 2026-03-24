@@ -1,0 +1,32 @@
+# LLM
+openai>=1.12.0            # OpenRouter uses OpenAI-compatible API
+
+# Data Sources
+yfinance>=0.2.40          # Stock prices & fundamentals
+feedparser>=6.0.11        # RSS news feeds
+requests>=2.31.0          # HTTP requests (SEC EDGAR, etc.)
+beautifulsoup4>=4.12.0    # HTML parsing for SEC filings
+fredapi>=0.5.2            # FRED macroeconomic data (Fed rate, CPI, GDP, etc.)
+
+# Vector DB / RAG
+chromadb>=0.5.0           # Persistent vector store for historical context
+
+# Graph Orchestration
+langgraph>=1.0.0          # LangGraph StateGraph for pipeline orchestration
+
+# Analysis
+pandas>=2.2.0
+numpy>=1.26.0
+
+# Database
+# (SQLite is built into Python — no extra package needed)
+
+# Frontend
+streamlit>=1.38.0
+plotly>=6.0.0             # Interactive charts (supply chain visualizations)
+
+# Observability (optional — enables LLM tracing dashboard)
+langfuse>=3.14.0          # Langfuse tracing for LLM calls
+
+# Utilities
+python-dotenv>=1.0.0      # Load .env file for API keys
