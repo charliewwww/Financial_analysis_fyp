@@ -55,6 +55,7 @@ from workflows.nodes import (
     should_refetch,
     should_reanalyze,
 )
+from vectordb.chroma_store import warm_up as _chroma_warm_up
 from agents.llm_client import check_llm_health, LLMHealthCheckError
 from database.reports_db import get_unchecked_predictions, update_prediction_actual
 from data_sources.yahoo_finance import get_stock_snapshot
@@ -292,6 +293,12 @@ def run_weekly_analysis(
         valid_sectors.append((sid, sector))
 
     total = len(valid_sectors)
+
+    # ── Pre-warm ChromaDB before threading to avoid ONNX race condition ──
+    # On first run (especially on cloud), ChromaDB downloads the ONNX embedding
+    # model. If multiple threads race to do this simultaneously the protobuf
+    # file gets corrupted. Warm up once here in the main thread first.
+    _chroma_warm_up()
 
     # ── Cloud provider → run sectors in parallel; local → sequential ──
     # Local LLM (Ollama) uses your GPU — concurrent requests would OOM

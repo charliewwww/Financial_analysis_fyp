@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 import time
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
@@ -70,15 +71,18 @@ MAX_DOC_LENGTH = 2000
 # ═══════════════════════════════════════════════════════════════════
 
 _client = None
+_client_lock = threading.Lock()  # Prevents concurrent ONNX model init race
 
 
 def _get_client():
     """Lazy-init ChromaDB PersistentClient. Cached for the session."""
     global _client
     if _client is None:
-        if not CHROMADB_AVAILABLE:
-            return None
-        _client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
+        with _client_lock:
+            if _client is None:  # double-checked locking
+                if not CHROMADB_AVAILABLE:
+                    return None
+                _client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
     return _client
 
 
@@ -91,6 +95,27 @@ def _get_collection(name: str):
         name=name,
         metadata={"hnsw:space": "cosine"},  # Cosine similarity for text
     )
+
+
+def warm_up() -> bool:
+    """
+    Pre-initialise the ChromaDB client and all collections in a single thread
+    BEFORE parallel sector workers start.  This ensures the ONNX embedding
+    model is downloaded and cached exactly once, avoiding a race condition
+    where concurrent threads corrupt the model.onnx protobuf file on first run.
+
+    Returns True if ChromaDB is available, False otherwise.
+    """
+    if not CHROMADB_AVAILABLE:
+        return False
+    try:
+        for col in (COL_NEWS, COL_FILINGS, COL_ANALYSES):
+            _get_collection(col)
+        logger.debug("ChromaDB warm-up complete")
+        return True
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("ChromaDB warm-up failed (RAG will be skipped): %s", exc)
+        return False
 
 
 def is_available() -> bool:
