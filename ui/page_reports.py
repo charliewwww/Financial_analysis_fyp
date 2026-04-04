@@ -6,10 +6,12 @@ import json
 import streamlit as st
 
 from config.sectors import SECTORS
-from database.reports_db import get_reports_list, get_report_by_id
+from database.reports_db import get_reports_list, get_report_by_id, delete_report, delete_reports
 from utils.markdown_export import export_report_markdown
 from ui.components import (
     SECTOR_COLORS, ring_svg, pill_cls, load_state, linkify_sources, report_row,
+    friendly_status, extract_signals, extract_thesis, split_analysis_sections,
+    extract_highlights, extract_geopolitical_notes,
 )
 from utils.time_utils import to_hkt, to_hkt_short
 
@@ -61,7 +63,7 @@ def _report_list_page():
                 'letter-spacing:-0.03em;color:#0f172a">Reports</h2>',
                 unsafe_allow_html=True)
 
-    c1, _ = st.columns([2, 4])
+    c1, _, c_del = st.columns([2, 3, 1])
     with c1:
         filt = st.selectbox(
             "Sector",
@@ -81,6 +83,29 @@ def _report_list_page():
         st.info("No reports yet. Run an analysis from the Dashboard.")
         return
 
+    with c_del:
+        if st.button("🗑️ Delete All", key="delete_all_reports", type="secondary"):
+            st.session_state["_confirm_delete_all"] = True
+
+    # Confirmation for delete all
+    if st.session_state.get("_confirm_delete_all"):
+        label = f"all {len(reports)} reports" if sid is None else f"all {len(reports)} {filt} reports"
+        st.warning(f"Delete {label}? This cannot be undone.")
+        c_yes, c_no, _ = st.columns([1, 1, 3])
+        with c_yes:
+            if st.button("Yes, delete all", key="confirm_del_all_yes", type="primary"):
+                ids = [r["id"] for r in reports]
+                n = delete_reports(ids)
+                _cached_reports_list.clear()
+                _load_full_report.clear()
+                st.session_state.pop("_confirm_delete_all", None)
+                st.toast(f"Deleted {n} reports", icon="🗑️")
+                st.rerun()
+        with c_no:
+            if st.button("Cancel", key="confirm_del_all_no"):
+                st.session_state.pop("_confirm_delete_all", None)
+                st.rerun()
+
     with st.container(border=True):
         for r in reports:
             report_row(r, f"rlist_{r['id']}", _open_report)
@@ -98,16 +123,39 @@ def _report_detail(report: dict):
     with hdr_left:
         st.button("← Back to reports", on_click=_back_to_list, width="stretch")
     with hdr_right:
-        md_text = export_report_markdown(report, state)
-        sector_slug = report.get("sector_id", "report").replace(" ", "_")
-        date_slug = report.get("created_at", "")[:10]
-        st.download_button(
-            label="📥 Download Markdown",
-            data=md_text,
-            file_name=f"{sector_slug}_{date_slug}.md",
-            mime="text/markdown",
-            width="stretch",
-        )
+        dl_col, del_col = st.columns(2)
+        with dl_col:
+            md_text = export_report_markdown(report, state)
+            sector_slug = report.get("sector_id", "report").replace(" ", "_")
+            date_slug = report.get("created_at", "")[:10]
+            st.download_button(
+                label="📥 Download",
+                data=md_text,
+                file_name=f"{sector_slug}_{date_slug}.md",
+                mime="text/markdown",
+                width="stretch",
+            )
+        with del_col:
+            if st.button("🗑️ Delete", key="delete_report", type="secondary", width="stretch"):
+                st.session_state["_confirm_delete_report"] = report["id"]
+
+    # Confirmation dialog
+    if st.session_state.get("_confirm_delete_report") == report["id"]:
+        st.warning(f"Delete report #{report['id']} ({report['sector_name']})? This cannot be undone.")
+        c_yes, c_no, _ = st.columns([1, 1, 3])
+        with c_yes:
+            if st.button("Yes, delete", key="confirm_del_yes", type="primary"):
+                delete_report(report["id"])
+                _cached_reports_list.clear()
+                _load_full_report.clear()
+                st.session_state.pop("_confirm_delete_report", None)
+                st.toast(f"Report #{report['id']} deleted", icon="🗑️")
+                _back_to_list()
+                st.rerun()
+        with c_no:
+            if st.button("Cancel", key="confirm_del_no"):
+                st.session_state.pop("_confirm_delete_report", None)
+                st.rerun()
 
     conf = report.get("confidence_score", 0) or 0
     date_str = to_hkt(report["created_at"])
@@ -116,107 +164,162 @@ def _report_detail(report: dict):
                 unsafe_allow_html=True)
     st.caption(f"Report #{report['id']} · {date_str}")
 
-    # ── Key takeaway banner ───────────────────────────────────────
-    ns = report.get("news_summary", "")
-    if ns:
-        st.info(ns)
+    # ── Thesis banner ───────────────────────────────────────────────
+    analysis_text = report.get("analysis", "")
+    thesis = extract_thesis(analysis_text)
+    if thesis:
+        st.markdown(
+            f'<div class="thesis-banner">'
+            f'<div class="thesis-label">Thesis</div>'
+            f'<div class="thesis-text">{thesis}</div></div>',
+            unsafe_allow_html=True,
+        )
 
-    # ── Metric cards row ──────────────────────────────────────────
-    m1, m2, m3, m4, m5, m6 = st.columns([1.2, 1, 1, 1, 1, 1])
-    with m1:
-        with st.container(border=True):
-            st.markdown(ring_svg(conf, size=110), unsafe_allow_html=True)
-    with m2:
-        with st.container(border=True):
-            vs = report.get("validation_status", "")
-            st.markdown('<span class="micro-label">Validation</span>',
-                        unsafe_allow_html=True)
-            st.markdown(f'<span class="pill {pill_cls(vs)}">{vs or "N/A"}</span>',
-                        unsafe_allow_html=True)
-    with m3:
-        with st.container(border=True):
-            n_articles = report.get("news_used", 0)
-            prices_json = report.get("prices_snapshot")
-            n_tickers = 0
-            if prices_json:
-                p_list = json.loads(prices_json) if isinstance(prices_json, str) else prices_json
-                n_tickers = len([p for p in p_list if not p.get("error")])
-            st.metric("Articles", n_articles)
-            st.caption(f"{n_tickers} tickers tracked")
-    with m4:
-        with st.container(border=True):
-            ds = report.get("data_sufficiency", "")
-            ds_color = {"sufficient": "#22c55e", "marginal": "#f59e0b",
-                        "insufficient": "#ef4444"}.get(ds, "#64748b")
-            st.markdown('<span class="micro-label">Data Quality</span>',
-                        unsafe_allow_html=True)
-            st.markdown(
-                f'<span style="color:{ds_color};font-weight:800;font-size:1.1rem;'
-                f'font-family:Manrope,sans-serif">'
-                f'● {ds.title() if ds else "N/A"}</span>',
-                unsafe_allow_html=True)
-    with m5:
-        with st.container(border=True):
-            macro_status = "—"
-            macro_count = 0
-            if state:
-                mm = state.get("macro_data", {}).get("_meta", {})
-                if mm.get("api_status") == "ok":
-                    macro_count = mm.get('indicators_fetched', 0)
-                    macro_status = f"{macro_count} ind."
-                elif mm.get("api_status") == "partial":
-                    macro_status = "Partial"
-            st.markdown('<span class="micro-label">Macro</span>',
-                        unsafe_allow_html=True)
-            st.markdown(
-                f'<span style="font-weight:800;font-size:1.5rem;color:#0f172a;'
-                f'font-family:Manrope,sans-serif">'
-                f'{macro_status}</span>',
-                unsafe_allow_html=True)
-            rag_hits = 0
-            if state:
-                rag_hits = state.get("rag_metadata", {}).get("total_results", 0)
-            st.caption(f"{rag_hits} RAG docs" if rag_hits else "No RAG context")
-    with m6:
-        with st.container(border=True):
-            timing_json = report.get("timing_snapshot")
-            total_t = 0
-            if timing_json:
-                t = json.loads(timing_json) if isinstance(timing_json, str) else timing_json
-                total_t = t.get("total_seconds", 0)
-            st.markdown('<span class="micro-label">Pipeline</span>',
-                        unsafe_allow_html=True)
-            st.markdown(
-                f'<span style="font-weight:800;font-size:1.5rem;color:#0f172a;'
-                f'font-family:Manrope,sans-serif">'
-                f'{total_t:.0f}s</span>',
-                unsafe_allow_html=True)
-            n_nodes = 0
-            if state:
-                n_nodes = len(state.get("node_executions", []))
-            st.caption(f"{n_nodes} nodes executed")
+    # ── Signal cards (buy / sell / hold) ──────────────────────────
+    signals = extract_signals(analysis_text)
+    if signals:
+        cards_html = '<div class="signal-grid">'
+        for sig in signals:
+            d = sig["direction"].lower()
+            css_cls = d if d in ("bullish", "bearish", "neutral") else "neutral"
+            move_html = f'<div class="signal-move">{sig["move"]}</div>' if sig["move"] else ""
+            reason_html = f'<div class="signal-reason">{sig["reasoning"]}</div>' if sig["reasoning"] else ""
+            cards_html += (
+                f'<div class="signal-card {css_cls}">'
+                f'<div class="signal-ticker">{sig["ticker"]}</div>'
+                f'<span class="signal-dir {css_cls}">{sig["direction"]}</span>'
+                f'{move_html}{reason_html}</div>'
+            )
+        cards_html += '</div>'
+        st.markdown(cards_html, unsafe_allow_html=True)
+
+    # ── Compact metric strip ────────────────────────────────────────
+    vs = report.get("validation_status", "")
+    n_articles = report.get("news_used", 0)
+    ds = report.get("data_sufficiency", "")
+    ds_label = ds.title() if ds else "N/A"
+    macro_status = "—"
+    if state:
+        mm = state.get("macro_data", {}).get("_meta", {})
+        if mm.get("api_status") == "ok":
+            macro_status = f"{mm.get('indicators_fetched', 0)} ind."
+        elif mm.get("api_status") == "partial":
+            macro_status = "Partial"
+    rag_hits = state.get("rag_metadata", {}).get("total_results", 0) if state else 0
+    timing_json = report.get("timing_snapshot")
+    total_t = 0
+    if timing_json:
+        t_data = json.loads(timing_json) if isinstance(timing_json, str) else timing_json
+        total_t = t_data.get("total_seconds", 0)
+
+    friendly_vs = friendly_status(vs) or "N/A"
+    pill = pill_cls(vs)
+
+    strip_html = (
+        '<div class="metric-strip">'
+        f'<div class="metric-chip">'
+        f'<div class="metric-chip-label">Score</div>'
+        f'<div class="metric-chip-value">{conf}<span style="font-size:0.7rem;color:#94a3b8">/ 10</span></div></div>'
+        f'<div class="metric-chip">'
+        f'<div class="metric-chip-label">Validation</div>'
+        f'<div><span class="pill {pill}" style="font-size:0.7rem">{friendly_vs}</span></div></div>'
+        f'<div class="metric-chip">'
+        f'<div class="metric-chip-label">Articles</div>'
+        f'<div class="metric-chip-value">{n_articles}</div></div>'
+        f'<div class="metric-chip">'
+        f'<div class="metric-chip-label">Data Quality</div>'
+        f'<div class="metric-chip-value" style="font-size:0.95rem">{ds_label}</div></div>'
+        f'<div class="metric-chip">'
+        f'<div class="metric-chip-label">Macro</div>'
+        f'<div class="metric-chip-value" style="font-size:0.95rem">{macro_status}</div>'
+        f'<div class="metric-chip-sub">{rag_hits} RAG</div></div>'
+        f'<div class="metric-chip">'
+        f'<div class="metric-chip-label">Pipeline</div>'
+        f'<div class="metric-chip-value">{total_t:.0f}s</div></div>'
+        '</div>'
+    )
+    st.markdown(strip_html, unsafe_allow_html=True)
 
     st.write("")
 
-    # ── Analysis card ─────────────────────────────────────────────
-    with st.container(border=True):
-        st.markdown('<span class="section-title">✨ Analysis</span>',
-                    unsafe_allow_html=True)
-        st.write("")
-        analysis_text = report.get("analysis", "*No analysis available.*")
+    # ── Segmented analysis sections ─────────────────────────────────
+    news_json = report.get("news_snapshot")
+    articles_for_links = []
+    if news_json:
+        try:
+            articles_for_links = json.loads(news_json) if isinstance(news_json, str) else news_json
+        except (json.JSONDecodeError, TypeError):
+            pass
 
-        # Build article list for linkification
-        news_json = report.get("news_snapshot")
-        articles_for_links = []
-        if news_json:
-            try:
-                articles_for_links = json.loads(news_json) if isinstance(news_json, str) else news_json
-            except (json.JSONDecodeError, TypeError):
-                pass
+    sections = split_analysis_sections(analysis_text)
+    # Decide where to insert technicals inline (after 2nd section or halfway)
+    tech_insert_idx = min(2, max(len(sections) - 1, 0))
 
-        # Make [SOURCE: ...] citations clickable
-        linked_analysis = linkify_sources(analysis_text, articles_for_links)
-        st.markdown(linked_analysis, unsafe_allow_html=True)
+    SECTION_ICONS = {
+        "KEY DEVELOPMENTS": "📰",
+        "DEEP CONTEXT": "🔍",
+        "MACRO": "📊",
+        "MACROECONOMIC CONTEXT": "📊",
+        "SUPPLY CHAIN": "🔗",
+        "SUPPLY CHAIN ANALYSIS": "🔗",
+        "COMPANY SPOTLIGHT": "🏢",
+        "RISK FACTORS": "⚠️",
+        "OVERVIEW": "📋",
+    }
+
+    for idx, (heading, content) in enumerate(sections):
+        icon = SECTION_ICONS.get(heading.upper(), "📄")
+        with st.container(border=True):
+            st.markdown(
+                f'<div class="report-section-header">{icon} {heading}</div>',
+                unsafe_allow_html=True,
+            )
+
+            # Highlighted key phrases
+            highlights = extract_highlights(content)
+            if highlights:
+                hl_html = "".join(
+                    f'<div class="section-highlight">💡 {h}</div>' for h in highlights
+                )
+                st.markdown(hl_html, unsafe_allow_html=True)
+
+            linked = linkify_sources(content, articles_for_links)
+            st.markdown(linked, unsafe_allow_html=True)
+
+            # Macro gauge visual — inject into macro section
+            is_macro = heading.upper() in ("MACRO", "MACROECONOMIC CONTEXT",
+                                           "MACRO ENVIRONMENT")
+            if is_macro and state:
+                _render_macro_gauge(state)
+                # Geopolitical news callout
+                geo_notes = extract_geopolitical_notes(analysis_text)
+                if geo_notes:
+                    geo_items = "".join(f"• {n}<br>" for n in geo_notes)
+                    st.markdown(
+                        f'<div class="geo-callout">'
+                        f'<div class="geo-callout-title">🌍 Geopolitical & Event Impact</div>'
+                        f'{geo_items}</div>',
+                        unsafe_allow_html=True,
+                    )
+
+        # Insert technical analysis inline after the chosen section
+        if idx == tech_insert_idx:
+            with st.container(border=True):
+                st.markdown(
+                    '<div class="report-section-header">📈 Technical Analysis</div>',
+                    unsafe_allow_html=True,
+                )
+                _render_technicals(report)
+
+    # Fallback if no sections were parsed
+    if not sections:
+        with st.container(border=True):
+            st.markdown('<span class="section-title">✨ Analysis</span>',
+                        unsafe_allow_html=True)
+            linked_analysis = linkify_sources(
+                analysis_text or "*No analysis available.*", articles_for_links
+            )
+            st.markdown(linked_analysis, unsafe_allow_html=True)
 
     st.write("")
 
@@ -252,7 +355,7 @@ def _report_detail(report: dict):
                     unsafe_allow_html=True)
         vs = report.get("validation_status", "")
         if vs:
-            st.markdown(f'<span class="pill {pill_cls(vs)}">{vs}</span>',
+            st.markdown(f'<span class="pill {pill_cls(vs)}">{friendly_status(vs)}</span>',
                         unsafe_allow_html=True)
         validation = report.get("validation", "")
         if validation:
@@ -283,14 +386,6 @@ def _report_detail(report: dict):
                     )
             st.write("")
 
-    # ── Technical analysis ────────────────────────────────────────
-    with st.container(border=True):
-        st.markdown('<span class="section-title">Technical Analysis</span>',
-                    unsafe_allow_html=True)
-        _render_technicals(report)
-
-    st.write("")
-
     # ── Evidence trail ────────────────────────────────────────────
     with st.container(border=True):
         st.markdown('<span class="section-title">Evidence Trail</span>',
@@ -300,22 +395,25 @@ def _report_detail(report: dict):
 
     st.write("")
 
-    # ── Deep dives ────────────────────────────────────────────────
-    st.markdown("##### Deep Dive")
-    with st.expander("RAG Historical Context"):
-        _detail_rag(state)
-    with st.expander("Macro Environment"):
-        _detail_macro(state)
-    with st.expander("All News Sources & Links"):
-        _detail_news(report)
-    with st.expander("SEC Filings"):
-        _detail_filings(report)
-    with st.expander("LLM Prompts & Responses"):
-        _detail_llm_io(state)
-    with st.expander("Pipeline Execution Trace"):
-        _detail_trace(state)
-    with st.expander("Pipeline Timing"):
-        _detail_timing(report)
+    # ── Deep dives — developer tools behind toggle ─────────────
+    st.write("")
+    show_advanced = st.toggle("Show Advanced Details", value=False, key=f"adv_{report['id']}")
+    if show_advanced:
+        st.markdown("##### Deep Dive")
+        with st.expander("RAG Historical Context"):
+            _detail_rag(state)
+        with st.expander("Macro Environment"):
+            _detail_macro(state)
+        with st.expander("All News Sources & Links"):
+            _detail_news(report)
+        with st.expander("SEC Filings"):
+            _detail_filings(report)
+        with st.expander("LLM Prompts & Responses"):
+            _detail_llm_io(state)
+        with st.expander("Pipeline Execution Trace"):
+            _detail_trace(state)
+        with st.expander("Pipeline Timing"):
+            _detail_timing(report)
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -424,6 +522,54 @@ def _render_supply_chain(chain_map: dict):
             f'<span class="chain-role">{role}</span>'
             f'<span style="color:#C8A951">→</span>{pills}</div>')
     st.markdown("".join(html), unsafe_allow_html=True)
+
+
+def _render_macro_gauge(state: dict):
+    """Render a compact macro indicators gauge row with direction arrows."""
+    macro = state.get("macro_data", {})
+    if not macro:
+        return
+
+    arrow_map = {"rising": "↑", "falling": "↓", "stable": "→", "unknown": "?"}
+    color_map = {"rising": "#22c55e", "falling": "#ef4444", "stable": "#94a3b8", "unknown": "#94a3b8"}
+
+    indicator_keys = [k for k in macro if k != "_meta"]
+    if not indicator_keys:
+        return
+
+    gauges = []
+    for key in indicator_keys:
+        d = macro[key]
+        trend = d.get("trend", "unknown")
+        arrow = arrow_map.get(trend, "?")
+        color = color_map.get(trend, "#94a3b8")
+        val = d.get("value", "N/A")
+        unit = d.get("unit", "")
+        name = d.get("name", key.replace("_", " ").title())
+        # Shorten name for display
+        short = name.split("(")[0].strip()
+        if len(short) > 20:
+            words = short.split()
+            short = " ".join(words[:3])
+
+        change = d.get("change")
+        delta_html = ""
+        if change is not None:
+            delta_color = "#22c55e" if change > 0 else ("#ef4444" if change < 0 else "#94a3b8")
+            delta_html = f'<div class="macro-gauge-delta" style="color:{delta_color}">{change:+.2f}{unit}</div>'
+
+        gauges.append(
+            f'<div class="macro-gauge">'
+            f'<div class="macro-gauge-arrow" style="color:{color}">{arrow}</div>'
+            f'<div class="macro-gauge-name">{short}</div>'
+            f'<div class="macro-gauge-val">{val}{unit}</div>'
+            f'{delta_html}</div>'
+        )
+
+    st.markdown(
+        f'<div class="macro-gauge-row">{"".join(gauges)}</div>',
+        unsafe_allow_html=True,
+    )
 
 
 def _render_technicals(report: dict):

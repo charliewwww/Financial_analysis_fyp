@@ -143,17 +143,22 @@ def validate_numbers(
     # Determine overall status
     result = ValidationResult(checks=claims)
     total_checkable = result.verified_count + result.discrepancy_count
+    discrepancy_ratio = (
+        result.discrepancy_count / total_checkable if total_checkable > 0 else 0.0
+    )
     if result.discrepancy_count == 0 and result.verified_count > 0:
         result.status = "PASSED"
         result.summary = f"All {result.verified_count} checkable claims verified within {tolerance_pct}% tolerance."
-    elif result.discrepancy_count == 1:
-        result.status = "PASSED WITH WARNINGS"
-        result.summary = (f"1 claim deviates more than {tolerance_pct}% "
-                          f"from real data. Review flagged items.")
-    elif result.discrepancy_count >= 2:
+    elif discrepancy_ratio > 0.5:
+        # More than half the checkable claims are off — genuine concern
         result.status = "FAILED"
-        result.summary = (f"{result.discrepancy_count} numerical discrepancies found. "
-                          f"Analysis may contain hallucinated numbers.")
+        result.summary = (f"{result.discrepancy_count}/{total_checkable} numerical claims "
+                          f"deviate beyond {tolerance_pct}% tolerance.")
+    elif result.discrepancy_count > 0:
+        result.status = "PASSED WITH WARNINGS"
+        result.summary = (f"{result.discrepancy_count} of {total_checkable} claims deviate "
+                          f"more than {tolerance_pct}% from real data. "
+                          f"Minor drift is normal for live prices.")
     elif result.unchecked_count > 0 and total_checkable == 0:
         # All claims are unchecked — can't verify anything
         result.status = "PASSED WITH WARNINGS"

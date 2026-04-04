@@ -134,12 +134,18 @@ class TestStricterThresholds:
             assert result.status == "FAILED"
 
     def test_one_discrepancy_is_warning(self):
-        """1 discrepancy → PASSED WITH WARNINGS."""
-        analysis = "NVDA is trading at $500.00."  # wrong
+        """1 discrepancy with at least 1 verified → PASSED WITH WARNINGS.
+
+        With ratio-based thresholds, only > 50% discrepancy triggers FAILED.
+        1/2 = 50% which is NOT > 50%, so it's PASSED WITH WARNINGS.
+        """
+        analysis = "NVDA is trading at $500.00. NVDA RSI is at 62.5."  # price wrong, RSI right
         prices = [{"ticker": "NVDA", "price": 130.0}]
-        result = validate_numbers(analysis, prices, [])
+        technicals = [{"ticker": "NVDA", "rsi_14": 62.5}]
+        result = validate_numbers(analysis, prices, technicals)
         discreps = [c for c in result.checks if c.status == "DISCREPANCY"]
-        if len(discreps) == 1:
+        verified = [c for c in result.checks if c.status == "VERIFIED"]
+        if len(discreps) >= 1 and len(verified) >= 1:
             assert result.status == "PASSED WITH WARNINGS"
 
 

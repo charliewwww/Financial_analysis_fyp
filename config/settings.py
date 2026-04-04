@@ -32,8 +32,8 @@ if LLM_PROVIDER == "ollama":
 else:
     LLM_BASE_URL = OPENROUTER_BASE_URL
     LLM_API_KEY = OPENROUTER_API_KEY
-    REASONING_MODEL = os.getenv("REASONING_MODEL", "z-ai/glm-4.7-flash")
-    FAST_MODEL = os.getenv("FAST_MODEL", "z-ai/glm-4.7-flash")
+    REASONING_MODEL = os.getenv("REASONING_MODEL", "google/gemma-4-31b-it")
+    FAST_MODEL = os.getenv("FAST_MODEL", "google/gemma-4-31b-it")
 
 # ── FRED (Federal Reserve Economic Data) ──────────────────────────
 # Free API key from https://fred.stlouisfed.org/docs/api/api_key.html

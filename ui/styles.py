@@ -341,17 +341,136 @@ hr { border-color: var(--outline-variant) !important; }
     .block-container { padding-top: 1.2rem; padding-left: 0.8rem; padding-right: 0.8rem; }
     [data-testid="stMetricValue"] > div { font-size: 1.25rem !important; }
     .pill { padding: 2px 8px; font-size: 0.65rem; }
-    .kpi-card { padding: 1.25rem; }
-    .kpi-value { font-size: 1.75rem; }
+    .kpi-card { padding: 1rem 1.25rem; }
+    .kpi-value { font-size: 1.5rem; }
+    .kpi-label { font-size: 0.5rem; }
     .glass-card { padding: 1.25rem; }
     .feed-row { flex-wrap: wrap; padding: 0.75rem; }
     .chain-row { flex-wrap: wrap; }
+    .cta-section { padding: 1.25rem; border-radius: 1.25rem; }
+    .section-title-lg { font-size: 1.25rem; }
     button[data-testid="stBaseButton-primary"],
     button[data-testid="stBaseButton-secondary"] {
         min-height: 44px !important;
         font-size: 0.85rem !important;
     }
-    [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; }
-    [data-testid="stColumn"] { min-width: 100% !important; flex: 1 1 100% !important; }
+    /* Stack columns into 2-col grid on mobile */
+    [data-testid="stHorizontalBlock"] {
+        flex-wrap: wrap !important;
+        gap: 0.5rem !important;
+    }
+    [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
+        min-width: 45% !important;
+        flex: 1 1 45% !important;
+    }
+}
+
+/* ── Compact metric strip ────────────────────────────────────────── */
+.metric-strip {
+    display: flex; flex-wrap: wrap; gap: 10px; margin: 4px 0 14px;
+}
+.metric-chip {
+    flex: 1 1 120px; text-align: center; padding: 10px 12px;
+    border-radius: 12px; border: 1px solid #f1f5f9;
+    background: #fafafa; font-family: Manrope, sans-serif;
+}
+.metric-chip-label {
+    font-size: 0.55rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.08em; color: #94a3b8; margin-bottom: 2px;
+}
+.metric-chip-value {
+    font-size: 1.2rem; font-weight: 800; color: #0f172a;
+}
+.metric-chip-sub { font-size: 0.68rem; color: #94a3b8; }
+
+/* ── Signal cards ───────────────────────────────────────────────── */
+.signal-grid { display: flex; flex-wrap: wrap; gap: 12px; margin: 8px 0 16px; }
+.signal-card {
+    flex: 1 1 220px; max-width: 340px;
+    border-radius: 14px; padding: 18px 22px;
+    font-family: Manrope, sans-serif; position: relative;
+    border: 1.5px solid rgba(0,0,0,0.06);
+}
+.signal-card.bullish { background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border-color: #bbf7d0; }
+.signal-card.bearish { background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%); border-color: #fecaca; }
+.signal-card.neutral { background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); border-color: #e2e8f0; }
+.signal-ticker {
+    font-size: 1.15rem; font-weight: 800; letter-spacing: -0.02em;
+    color: #0f172a; margin-bottom: 2px;
+}
+.signal-dir {
+    font-size: 0.7rem; font-weight: 800; letter-spacing: 0.08em;
+    text-transform: uppercase; margin-bottom: 6px; display: inline-block;
+    padding: 2px 8px; border-radius: 6px;
+}
+.signal-dir.bullish { background: #22c55e; color: #fff; }
+.signal-dir.bearish { background: #ef4444; color: #fff; }
+.signal-dir.neutral { background: #94a3b8; color: #fff; }
+.signal-move { font-size: 0.82rem; color: #475569; margin-bottom: 4px; }
+.signal-reason { font-size: 0.75rem; color: #64748b; line-height: 1.4; }
+
+/* ── Section header with icon ───────────────────────────────────── */
+.report-section-header {
+    font-family: Manrope, sans-serif; font-weight: 800;
+    font-size: 1.1rem; color: #0f172a;
+    letter-spacing: -0.02em; margin: 0 0 10px;
+    padding-bottom: 8px; border-bottom: 2px solid #f1f5f9;
+}
+
+/* ── Thesis banner ──────────────────────────────────────────────── */
+.thesis-banner {
+    background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+    color: #f8fafc; border-radius: 14px; padding: 22px 28px;
+    font-family: Manrope, sans-serif; margin-bottom: 16px;
+}
+.thesis-label {
+    font-size: 0.65rem; font-weight: 700; letter-spacing: 0.1em;
+    text-transform: uppercase; color: #C8A951; margin-bottom: 6px;
+}
+.thesis-text {
+    font-size: 1.15rem; font-weight: 700; line-height: 1.5;
+    letter-spacing: -0.01em;
+}
+
+/* ── Section highlight callout ──────────────────────────────────── */
+.section-highlight {
+    background: linear-gradient(90deg, #fffbeb 0%, #fef3c7 100%);
+    border-left: 4px solid #C8A951; border-radius: 0 10px 10px 0;
+    padding: 10px 16px; margin: 10px 0 12px;
+    font-family: Manrope, sans-serif; font-size: 0.88rem;
+    font-weight: 700; color: #1e293b; line-height: 1.45;
+}
+
+/* ── Macro gauge row ────────────────────────────────────────────── */
+.macro-gauge-row {
+    display: flex; flex-wrap: wrap; gap: 10px; margin: 10px 0;
+}
+.macro-gauge {
+    flex: 1 1 140px; text-align: center; padding: 12px 10px;
+    border-radius: 12px; background: #f8fafc; border: 1px solid #f1f5f9;
+    font-family: Manrope, sans-serif;
+}
+.macro-gauge-arrow { font-size: 1.5rem; margin-bottom: 2px; }
+.macro-gauge-name {
+    font-size: 0.65rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.05em; color: #64748b; margin-bottom: 2px;
+}
+.macro-gauge-val {
+    font-size: 1rem; font-weight: 800; color: #0f172a;
+}
+.macro-gauge-delta { font-size: 0.7rem; }
+
+/* ── Geopolitical callout ───────────────────────────────────────── */
+.geo-callout {
+    background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+    border: 1px solid #bae6fd; border-radius: 12px;
+    padding: 14px 18px; margin: 8px 0;
+    font-family: Inter, sans-serif; font-size: 0.84rem;
+    color: #0c4a6e; line-height: 1.5;
+}
+.geo-callout-title {
+    font-family: Manrope, sans-serif; font-weight: 800;
+    font-size: 0.78rem; text-transform: uppercase;
+    letter-spacing: 0.06em; color: #0369a1; margin-bottom: 6px;
 }
 </style>"""

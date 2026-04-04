@@ -388,8 +388,11 @@ class TestValidateNode:
     @patch("workflows.nodes.call_llm")
     def test_failed_increments_retry(self, mock_llm):
         mock_llm.return_value = "VERDICT: FAILED\n⚠️ DISCREPANCY: Completely fabricated numbers."
+        # Use $999.00 so the price regex matches and programmatic layer
+        # also flags FAILED (1/1 = 100% discrepancy ratio > 50%).
+        # Both layers must agree on FAILED for overall FAILED.
         state = _sector_state(
-            analysis_text="NVDA trades at $999.",
+            analysis_text="NVDA trades at $999.00.",
             prices=_FAKE_PRICES,
             technicals=_FAKE_TECHNICALS,
             validation_retry_count=0,

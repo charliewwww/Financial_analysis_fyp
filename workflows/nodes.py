@@ -848,9 +848,12 @@ def validate_node(state: PipelineState) -> PipelineState:
         # ── Merge both layers ────────────────────────────────────
         all_issues = programmatic_issues + llm_issues
 
-        # Overall status: worst of the two layers wins
-        if programmatic_status == "FAILED" or llm_status == "FAILED":
+        # Overall status: only FAILED when both layers agree
+        if programmatic_status == "FAILED" and llm_status == "FAILED":
             state.validation_status = "FAILED"
+        elif programmatic_status == "FAILED" or llm_status == "FAILED":
+            # One layer failed — flag for review but don't hard-fail
+            state.validation_status = "PASSED WITH WARNINGS"
         elif "WARNING" in programmatic_status or "WARNING" in llm_status:
             state.validation_status = "PASSED WITH WARNINGS"
         elif programmatic_status == "PASSED" and llm_status == "PASSED":

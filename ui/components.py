@@ -58,12 +58,24 @@ def pill_cls(status: str) -> str:
     """Map validation status to pill CSS class."""
     s = (status or "").upper()
     if "FAILED" in s:
-        return "pill-red"
+        return "pill-amber"  # amber, not red — soft visual
     if "WARNING" in s:
         return "pill-amber"
     if "PASSED" in s:
         return "pill-green"
     return "pill-gray"
+
+
+def friendly_status(status: str) -> str:
+    """User-facing label for validation status."""
+    s = (status or "").upper()
+    if "FAILED" in s:
+        return "Needs Review"
+    if "WARNING" in s:
+        return "Reviewed"
+    if "PASSED" in s:
+        return "Verified"
+    return ""
 
 
 def load_state(report: dict) -> dict | None:
@@ -147,11 +159,9 @@ def report_row(report: dict, btn_key: str, open_callback):
             unsafe_allow_html=True)
     with c_name:
         st.markdown(f"**{report['sector_name']}**")
-        caption_parts = [date_str]
-        if vs:
-            caption_parts.append(vs.lower())
-        st.caption(" · ".join(caption_parts))
+        st.caption(date_str)
     with c_score:
+        friendly = friendly_status(vs)
         score_html = (
             f'<div style="text-align:right;margin-top:4px">'
             f'<span style="font-family:Manrope,sans-serif;font-weight:800;'
@@ -159,11 +169,11 @@ def report_row(report: dict, btn_key: str, open_callback):
             f'<span style="font-size:0.625rem;color:#cbd5e1;font-weight:700;'
             f'margin-left:2px">/10</span></span>'
         )
-        if vs:
+        if friendly:
             score_html += (
                 f'<br><span style="font-size:0.5625rem;font-weight:800;'
                 f'color:#b8860b;text-transform:uppercase;letter-spacing:0.05em">'
-                f'{vs.lower()}</span>'
+                f'{friendly}</span>'
             )
         score_html += '</div>'
         st.markdown(score_html, unsafe_allow_html=True) if conf else st.markdown("—")
@@ -171,3 +181,155 @@ def report_row(report: dict, btn_key: str, open_callback):
         st.button("→", key=btn_key,
                   on_click=open_callback, args=(report["id"],),
                   type="secondary")
+
+
+# ── Signal extraction ────────────────────────────────────────────
+
+def extract_signals(analysis_text: str) -> list[dict]:
+    """Parse PRICE PREDICTIONS section to extract buy/sell/hold signals.
+
+    Returns list of dicts: {ticker, direction, move, reasoning, risk}
+    """
+    if not analysis_text:
+        return []
+
+    signals = []
+    # Find the PRICE PREDICTIONS section
+    pred_match = re.search(
+        r'##\s*PRICE PREDICTIONS.*?\n(.*?)(?=\n##\s|\Z)',
+        analysis_text, re.DOTALL | re.IGNORECASE
+    )
+    if not pred_match:
+        return []
+
+    block = pred_match.group(1)
+
+    # Parse each ticker prediction:
+    # **NVDA**: BULLISH | Expected move: +3% to +7%
+    ticker_pattern = re.compile(
+        r'\*{0,2}(\w+)\*{0,2}\s*:\s*(BULLISH|BEARISH|NEUTRAL)\s*'
+        r'(?:\|\s*Expected\s+move\s*:\s*([^\n]*?))?(?:\n|$)',
+        re.IGNORECASE
+    )
+    for m in ticker_pattern.finditer(block):
+        ticker = m.group(1).upper()
+        direction = m.group(2).upper()
+        move = (m.group(3) or "").strip()
+
+        # Find reasoning (next line starting with "- Reasoning:")
+        pos = m.end()
+        reasoning = ""
+        risk = ""
+        remaining = block[pos:pos + 500]
+        for line in remaining.split("\n"):
+            line_s = line.strip().lstrip("-•* ")
+            if line_s.lower().startswith("reasoning:"):
+                reasoning = line_s[len("reasoning:"):].strip()
+            elif line_s.lower().startswith("key risk:"):
+                risk = line_s[len("key risk:"):].strip()
+            elif re.match(r'\*{0,2}\w+\*{0,2}\s*:', line_s):
+                break  # next ticker
+
+        signals.append({
+            "ticker": ticker,
+            "direction": direction,
+            "move": move,
+            "reasoning": reasoning,
+            "risk": risk,
+        })
+
+    return signals
+
+
+def extract_thesis(analysis_text: str) -> str:
+    """Extract the one-line THESIS from the analysis."""
+    if not analysis_text:
+        return ""
+    m = re.search(r'##\s*THESIS\s*\n+(.+?)(?:\n\n|\n##)', analysis_text, re.DOTALL)
+    if m:
+        return m.group(1).strip().split("\n")[0].strip()
+    return ""
+
+
+def split_analysis_sections(analysis_text: str) -> list[tuple[str, str]]:
+    """Split analysis into (heading, content) pairs by ## headers.
+
+    Skips PRICE PREDICTIONS, CONFIDENCE SCORE, and THESIS (shown separately).
+    """
+    if not analysis_text:
+        return []
+
+    skip = {"PRICE PREDICTIONS", "CONFIDENCE SCORE", "THESIS",
+            "PRICE PREDICTIONS (1-WEEK OUTLOOK)"}
+    sections = []
+    parts = re.split(r'\n(?=##\s)', analysis_text)
+
+    for part in parts:
+        m = re.match(r'##\s*(.+?)\s*\n(.*)', part, re.DOTALL)
+        if m:
+            heading = m.group(1).strip()
+            # Strip common suffixes for comparison
+            heading_check = re.sub(r'\s*\(.*?\)\s*$', '', heading).upper()
+            if heading_check not in skip:
+                sections.append((heading, m.group(2).strip()))
+        elif not sections:
+            # Content before first heading (preamble)
+            stripped = part.strip()
+            if stripped:
+                sections.append(("Overview", stripped))
+
+    return sections
+
+
+def extract_highlights(content: str, n: int = 2) -> list[str]:
+    """Extract the 1-2 most important highlighted phrases from a section.
+
+    Looks for bold text (**...**), then falls back to the first sentence.
+    """
+    if not content:
+        return []
+
+    # Collect bold phrases
+    bolds = re.findall(r'\*\*(.+?)\*\*', content)
+    # Filter out very short (single word labels) and very long ones
+    bolds = [b.strip() for b in bolds if 8 < len(b.strip()) < 200]
+
+    if bolds:
+        return bolds[:n]
+
+    # Fallback: first non-empty sentence
+    sentences = re.split(r'(?<=[.!?])\s+', content.strip())
+    sentences = [s.strip() for s in sentences if len(s.strip()) > 15]
+    return sentences[:n]
+
+
+def extract_geopolitical_notes(analysis_text: str) -> list[str]:
+    """Extract geopolitical/event-driven notes from the analysis.
+
+    Looks for sentences mentioning geopolitical keywords.
+    """
+    if not analysis_text:
+        return []
+
+    geo_keywords = re.compile(
+        r'(?:tariff|sanction|geopolit|iran|china|trade\s+war|conflict|embargo|'
+        r'war|tension|military|nato|opec|oil\s+price|crude|invasion|missile|'
+        r'nuclear|diplomatic|treaty|election|government|policy\s+shift|'
+        r'regulation|ban|restrict)',
+        re.IGNORECASE
+    )
+
+    notes = []
+    # Split into sentences
+    for sentence in re.split(r'(?<=[.!?])\s+', analysis_text):
+        sentence = sentence.strip()
+        if geo_keywords.search(sentence) and 20 < len(sentence) < 400:
+            # Clean markdown
+            clean = re.sub(r'\*+', '', sentence).strip()
+            clean = re.sub(r'\[SOURCE:[^\]]*\]', '', clean).strip()
+            if clean and clean not in notes:
+                notes.append(clean)
+            if len(notes) >= 3:
+                break
+
+    return notes

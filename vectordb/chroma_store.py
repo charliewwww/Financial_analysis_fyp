@@ -50,9 +50,13 @@ except ImportError:
     CHROMADB_AVAILABLE = False
 
 # ── Paths & Constants ────────────────────────────────────────────
-CHROMA_DB_PATH = os.path.join(
+# CHROMA_DB_PATH can be overridden via env var to point to a persistent
+# volume outside the project directory (survives git pulls/deployments).
+# Example .env entry:  CHROMA_DB_PATH=/data/chroma_db
+_default_chroma_path = os.path.join(
     os.path.dirname(os.path.dirname(__file__)), "chroma_db"
 )
+CHROMA_DB_PATH = os.environ.get("CHROMA_DB_PATH", _default_chroma_path)
 
 # Collection names
 COL_NEWS = "news_articles"

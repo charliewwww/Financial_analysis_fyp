@@ -46,17 +46,24 @@ def render():
     st.caption("AI directional predictions with reasoning — verified against actual prices after 1 week")
 
     stats = _cached_prediction_stats()
-    k1, k2, k3, k4, k5 = st.columns(5)
+
+    # ── KPI row — 2x2 on mobile, 4 cols on desktop ───────────────
+    k1, k2, k3, k4 = st.columns(4)
     kpi_items = [
-        (k1, "Total", str(stats["total_predictions"]), ""),
-        (k2, "Verified", str(stats["checked"]), ""),
-        (k3, "Pending", str(stats["unchecked"]), ""),
+        (k1, "Total Predictions", str(stats["total_predictions"]),
+         "across all reports"),
+        (k2, "Verified",
+         f"{stats['checked']} / {stats['total_predictions']}",
+         "checked against actuals"),
+        (k3, "AI Accuracy",
+         f"{stats.get('direction_accuracy_pct')}%"
+         if stats.get('direction_accuracy_pct') is not None else "—",
+         f"{stats.get('direction_correct', 0)} correct calls"
+         if stats.get('direction_correct') else "pending verification"),
         (k4, "Avg |Weekly Δ|",
          f"{stats.get('avg_absolute_weekly_change', 0):.1f}%"
-         if stats.get('avg_absolute_weekly_change') else "N/A", ""),
-        (k5, "AI Accuracy",
-         f"{stats.get('direction_accuracy_pct')}%"
-         if stats.get('direction_accuracy_pct') is not None else "N/A", ""),
+         if stats.get('avg_absolute_weekly_change') else "—",
+         "absolute price movement"),
     ]
     for col, label, value, sub in kpi_items:
         with col:
@@ -64,40 +71,147 @@ def render():
                 f'<div class="kpi-card">'
                 f'<div class="kpi-label">{label}</div>'
                 f'<div class="kpi-value" style="font-size:1.75rem">{value}</div>'
+                f'<div style="font-size:0.7rem;color:#94a3b8;margin-top:0.25rem">{sub}</div>'
                 f'</div>', unsafe_allow_html=True)
 
     st.write("")
 
-    # ── Prediction Accuracy Chart ─────────────────────────────────
+    # ── Accuracy chart (with fallback for no verified data) ───────
     accuracy_data = _cached_accuracy_over_time()
     _render_accuracy_chart(accuracy_data)
 
     st.write("")
 
+    # ── Prediction cards per report ───────────────────────────────
     reports = _cached_reports_list(limit=50)
+    has_any_predictions = False
     for rpt in reports:
         preds = _cached_predictions(rpt["id"])
         if not preds:
             continue
+        has_any_predictions = True
         checked = sum(1 for p in preds if p.get("price_1w_later") is not None)
-        has_ai = any(p.get("ai_direction") for p in preds)
-        icon = "●" if checked == len(preds) else "○"
-        ai_badge = " · 🤖 AI predictions" if has_ai else ""
+        total_preds = len(preds)
+        ai_preds = [p for p in preds if p.get("ai_direction")]
+        status_icon = "✅" if checked == total_preds else ("⏳" if checked == 0 else "🔄")
+
         with st.container(border=True):
-            st.markdown(f"**{icon}  {rpt['sector_name']}** · "
-                        f"{to_hkt_short(rpt['created_at'])} · "
-                        f"{checked}/{len(preds)} verified{ai_badge}")
-            _render_predictions_table(preds)
+            # Header row with sector + summary
+            hdr_l, hdr_r = st.columns([3, 1])
+            with hdr_l:
+                st.markdown(
+                    f"**{rpt['sector_name']}** · "
+                    f"{to_hkt_short(rpt['created_at'])}")
+            with hdr_r:
+                st.markdown(
+                    f'<div style="text-align:right;font-size:0.8rem;color:#64748b">'
+                    f'{status_icon} {checked}/{total_preds} verified'
+                    f'</div>', unsafe_allow_html=True)
+
+            # AI Prediction cards — show reasoning prominently
+            if ai_preds:
+                _render_ai_predictions(ai_preds)
+            else:
+                _render_predictions_table(preds)
+
+    if not has_any_predictions:
+        st.info(
+            "**No predictions yet.** Run an analysis from the Dashboard — "
+            "the AI will generate directional predictions for each stock "
+            "in the analysed sectors."
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════
-# PREDICTIONS TABLE
+# AI PREDICTION CARDS (new layout — reasoning-first)
+# ═══════════════════════════════════════════════════════════════════
+
+_DIR_STYLE = {
+    "BULLISH":  {"bg": "rgba(34,197,94,0.08)",  "border": "#22c55e", "icon": "📈", "color": "#16a34a"},
+    "BEARISH":  {"bg": "rgba(239,68,68,0.08)",  "border": "#ef4444", "icon": "📉", "color": "#dc2626"},
+    "NEUTRAL":  {"bg": "rgba(100,116,139,0.08)","border": "#94a3b8", "icon": "➡️", "color": "#64748b"},
+}
+
+
+def _render_ai_predictions(preds: list[dict]):
+    """Render AI predictions as visual cards with reasoning front-and-center."""
+    # Group predictions into rows of 2–3
+    cols_per_row = min(len(preds), 3)
+    for row_start in range(0, len(preds), cols_per_row):
+        row_preds = preds[row_start:row_start + cols_per_row]
+        cols = st.columns(len(row_preds))
+
+        for col, pred in zip(cols, row_preds):
+            with col:
+                ai_dir = pred.get("ai_direction", "NEUTRAL")
+                style = _DIR_STYLE.get(ai_dir, _DIR_STYLE["NEUTRAL"])
+                ticker = pred.get("ticker", "?")
+                ai_change = pred.get("ai_predicted_change", "")
+                ai_reasoning = pred.get("ai_reasoning", "")
+                ai_risk = pred.get("ai_risk", "")
+                price_at = pred.get("price_at_report")
+                price_1w = pred.get("price_1w_later")
+                actual_ch = pred.get("actual_change_1w")
+                correct = pred.get("prediction_correct")
+
+                # Result badge
+                result_html = ""
+                if correct is not None:
+                    if correct == 1:
+                        result_html = '<span class="pill pill-green" style="margin-left:8px">✓ Correct</span>'
+                    else:
+                        result_html = '<span class="pill pill-red" style="margin-left:8px">✗ Wrong</span>'
+                elif price_1w is None:
+                    result_html = '<span class="pill pill-gray" style="margin-left:8px">pending</span>'
+
+                # Price movement
+                price_html = ""
+                if price_at:
+                    price_html = f'<div style="font-size:0.78rem;color:#64748b;margin-top:4px">${price_at:.2f}'
+                    if price_1w is not None and actual_ch is not None:
+                        arrow = "↑" if actual_ch > 0 else ("↓" if actual_ch < 0 else "→")
+                        ch_color = "#16a34a" if actual_ch > 0 else ("#dc2626" if actual_ch < 0 else "#64748b")
+                        price_html += (f' → ${price_1w:.2f} '
+                                       f'<span style="color:{ch_color};font-weight:700">'
+                                       f'{arrow} {actual_ch:+.1f}%</span>')
+                    else:
+                        price_html += ' → <span style="color:#94a3b8">awaiting</span>'
+                    price_html += '</div>'
+
+                # Card HTML
+                st.markdown(
+                    f'<div style="background:{style["bg"]};border-left:4px solid {style["border"]};'
+                    f'border-radius:1rem;padding:1rem 1.25rem;margin-bottom:0.5rem">'
+                    # Ticker + Direction header
+                    f'<div style="display:flex;align-items:center;justify-content:space-between;'
+                    f'margin-bottom:0.5rem">'
+                    f'<span style="font-weight:800;font-size:1.1rem;font-family:Manrope,sans-serif">'
+                    f'{ticker}</span>'
+                    f'<span style="color:{style["color"]};font-weight:700;font-size:0.85rem">'
+                    f'{style["icon"]} {ai_dir}'
+                    f'{" · " + ai_change if ai_change else ""}</span>'
+                    f'</div>'
+                    # Result + Price
+                    f'<div style="display:flex;align-items:center;flex-wrap:wrap">'
+                    f'{result_html}'
+                    f'</div>'
+                    f'{price_html}'
+                    # Reasoning (visible by default!)
+                    f'{"<div style=" + chr(34) + "margin-top:0.75rem;font-size:0.82rem;line-height:1.6;color:#334155" + chr(34) + ">💭 " + ai_reasoning + "</div>" if ai_reasoning else ""}'
+                    # Risk
+                    f'{"<div style=" + chr(34) + "margin-top:0.35rem;font-size:0.78rem;color:#b45309" + chr(34) + ">⚠️ " + ai_risk + "</div>" if ai_risk else ""}'
+                    f'</div>',
+                    unsafe_allow_html=True)
+
+
+# ═══════════════════════════════════════════════════════════════════
+# FALLBACK TABLE (for reports without AI predictions)
 # ═══════════════════════════════════════════════════════════════════
 
 def _render_predictions_table(preds: list[dict]):
     h1, h2, h3, h4 = st.columns([1.5, 1.8, 2.5, 1.2])
     with h1:
-        st.caption("TICKER / AI CALL")
+        st.caption("TICKER")
     with h2:
         st.caption("AT REPORT")
     with h3:
@@ -105,27 +219,10 @@ def _render_predictions_table(preds: list[dict]):
     with h4:
         st.caption("RESULT")
 
-    dir_colors = {"BULLISH": "#22c55e", "BEARISH": "#ef4444", "NEUTRAL": "#64748b"}
-    dir_icons = {"BULLISH": "📈", "BEARISH": "📉", "NEUTRAL": "➡️"}
-
     for pred in preds:
-        ai_dir = pred.get("ai_direction")
-        ai_change = pred.get("ai_predicted_change", "")
-        ai_reasoning = pred.get("ai_reasoning", "")
-        ai_risk = pred.get("ai_risk", "")
-
         c1, c2, c3, c4 = st.columns([1.5, 1.8, 2.5, 1.2])
         with c1:
             st.markdown(f"**{pred['ticker']}**")
-            if ai_dir:
-                color = dir_colors.get(ai_dir, "#9C9C9C")
-                icon = dir_icons.get(ai_dir, "")
-                st.markdown(
-                    f'<span style="color:{color};font-weight:700;font-size:0.85rem">'
-                    f'{icon} {ai_dir}</span>',
-                    unsafe_allow_html=True)
-                if ai_change:
-                    st.caption(f"Expected: {ai_change}")
         with c2:
             p = pred.get("price_at_report")
             st.write(f"${p:.2f}" if p else "—")
@@ -149,18 +246,6 @@ def _render_predictions_table(preds: list[dict]):
                 else:
                     st.markdown('<span class="pill pill-red">✗ Wrong</span>',
                                 unsafe_allow_html=True)
-            elif pred.get("checked_at"):
-                st.caption(pred["checked_at"][:10])
-
-        # Show AI reasoning below the row
-        if ai_reasoning:
-            st.markdown(
-                f'<div style="margin:-8px 0 8px 0;padding:10px 14px;background:#f8fafc;'
-                f'border-radius:1rem;font-size:0.85rem;border:1px solid rgba(255,255,255,0.4)">'
-                f'💭 <strong>Reasoning:</strong> {ai_reasoning}'
-                f'{"<br>⚠️ <strong>Key Risk:</strong> " + ai_risk if ai_risk else ""}'
-                f'</div>',
-                unsafe_allow_html=True)
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -169,18 +254,33 @@ def _render_predictions_table(preds: list[dict]):
 
 def _render_accuracy_chart(accuracy_data: list[dict]):
     """Bar + line chart showing per-report accuracy and cumulative correct rate."""
-    # Only show chart if we have verified predictions
     checked = [d for d in accuracy_data if d["accuracy_pct"] is not None]
-    if not checked:
-        with st.container(border=True):
-            st.markdown("**📊 Prediction Accuracy Over Time**")
-            st.caption("Chart will appear once predictions are verified against actual prices (after 1 week).")
-        return
 
     with st.container(border=True):
         st.markdown("**📊 Prediction Accuracy Over Time**")
 
-        # --- Per-report accuracy bar chart ---
+        if not checked:
+            # Helpful fallback instead of dead end
+            st.markdown(
+                '<div style="padding:1.5rem;text-align:center;color:#64748b">'
+                '<div style="font-size:2rem;margin-bottom:0.5rem">📋</div>'
+                '<div style="font-size:0.9rem;font-weight:600;margin-bottom:0.5rem">'
+                'Accuracy tracking activates automatically</div>'
+                '<div style="font-size:0.82rem;line-height:1.6">'
+                'After each analysis, the system records AI price predictions.<br>'
+                'One week later, it checks actual prices and scores accuracy.<br>'
+                '<strong>You don\'t need to do anything</strong> — just run analyses and check back.'
+                '</div></div>',
+                unsafe_allow_html=True)
+
+            # Still show unverified predictions summary if available
+            unverified = [d for d in accuracy_data]
+            if unverified:
+                total_p = sum(d.get("correct", 0) + d.get("wrong", 0) + d.get("pending", 0) for d in unverified)
+                st.caption(f"📌 {total_p} predictions waiting for verification (need 7+ days to mature)")
+            return
+
+        # --- Charts ---
         labels = []
         accuracies = []
         correct_counts = []
@@ -204,7 +304,6 @@ def _render_accuracy_chart(accuracy_data: list[dict]):
             cum_rate = round(cumulative_correct / cumulative_total * 100, 1) if cumulative_total > 0 else 0
             cumulative_rates.append(cum_rate)
 
-        # Render with Streamlit native charts via a mini dataframe
         import pandas as pd
         chart_df = pd.DataFrame({
             "Report": labels,
@@ -215,7 +314,6 @@ def _render_accuracy_chart(accuracy_data: list[dict]):
             "Cumulative Accuracy (%)": cumulative_rates,
         })
 
-        # Show two charts side by side
         ch1, ch2 = st.columns(2)
 
         with ch1:

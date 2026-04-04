@@ -10,6 +10,8 @@ import streamlit as st
 import threading
 import time as _time
 
+_MAX_ANALYSIS_SECONDS = 900  # 15-minute hard timeout
+
 from config.sectors import SECTORS
 # NOTE: workflow / LLM imports are LAZY (inside _analysis_worker)
 # to avoid loading langgraph + chromadb + yfinance on every page render.
@@ -53,6 +55,24 @@ def render():
 
     all_rpts = _cached_reports_list(limit=50)
     stats = _cached_prediction_stats()
+
+    # ── First-run welcome ─────────────────────────────────────────
+    if not all_rpts:
+        st.markdown(
+            '<div style="background:linear-gradient(135deg,rgba(184,134,11,0.06) 0%,'
+            'rgba(212,175,55,0.04) 100%);border:1px solid rgba(184,134,11,0.15);'
+            'border-radius:1.5rem;padding:2rem 2.5rem;margin-bottom:1.5rem">'
+            '<h3 style="font-family:Manrope,sans-serif;font-weight:800;'
+            'letter-spacing:-0.02em;margin:0 0 0.5rem 0;color:#0f172a">'
+            'Welcome to Supply Chain Alpha</h3>'
+            '<p style="color:#64748b;font-size:0.9rem;line-height:1.7;margin:0">'
+            'Your AI-powered finance intelligence platform. It analyses stocks across '
+            '<strong>3 sectors</strong> using multi-agent reasoning — pulling live news, '
+            'SEC filings, technical indicators, and macroeconomic data — then validates '
+            'every claim against real numbers.<br><br>'
+            '👇 <strong>Scroll down and click "Run Full Analysis"</strong> to generate your first report.</p>'
+            '</div>',
+            unsafe_allow_html=True)
 
     avg_conf = 0.0
     if all_rpts:
@@ -212,12 +232,13 @@ def render():
         run = st.button("🚀  Run Full Analysis", type="primary",
                         disabled=len(selected_ids) == 0,
                         use_container_width=True)
-        st.markdown('<div style="display:flex;align-items:center;gap:6px;'
-                    'justify-content:center;margin-top:0.5rem">'
-                    '<span style="width:6px;height:6px;background:#22c55e;'
-                    'border-radius:9999px;display:inline-block"></span>'
-                    '<span class="micro-label">Ready · Estimated Compute: ~5m</span>'
-                    '</div>', unsafe_allow_html=True)
+        est_minutes = max(2, len(selected_ids) * 2)
+        st.markdown(f'<div style="display:flex;align-items:center;gap:6px;'
+                    f'justify-content:center;margin-top:0.5rem">'
+                    f'<span style="width:6px;height:6px;background:#22c55e;'
+                    f'border-radius:9999px;display:inline-block"></span>'
+                    f'<span class="micro-label">Ready · {len(selected_ids)} sectors · ~{est_minutes}min</span>'
+                    f'</div>', unsafe_allow_html=True)
 
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -233,6 +254,7 @@ def render():
 # ═══════════════════════════════════════════════════════════════════
 
 _JOB_KEY = "_analysis_job"          # session-state key for the shared dict
+_job_lock = threading.Lock()        # protects mutation of shared dicts
 
 
 def _new_job() -> dict:
@@ -246,6 +268,8 @@ def _new_job() -> dict:
         "finished_at": None,
         "cancel": threading.Event(),  # set() to request cancellation
         "cancelled": False,
+        "total_sectors": 0,
+        "completed_sectors": 0,
     }
 
 
@@ -281,29 +305,41 @@ def _analysis_worker(job: dict, selected_ids: list[str] | None = None):
         if selected_ids is None or sid in selected_ids
     }
 
+    def _log(icon, text):
+        with _job_lock:
+            job["log"].append((icon, text))
+
     def _run_one(sid: str, sector: dict, idx: int, total: int):
         """Run a single sector analysis (called from thread pool)."""
         label = f"[{idx}/{total}] 📈 {sector['name']}"
-        job["log"].append(("⏳", label))
+        _log("⏳", label)
 
         def on_progress(event_type, message, _name=sector["name"]):
             if event_type == "node":
-                job["log"].append(("  ↳", f"{_name}: {message}"))
+                _log("  ↳", f"{_name}: {message}")
 
         result = run_sector_analysis(sid, sector, progress_fn=on_progress)
         if result.get("error"):
-            job["log"].append(("❌", f"{sector['name']}: {result['error']}"))
+            _log("❌", f"{sector['name']}: {result['error']}")
         else:
             conf = result.get("confidence", 0)
             t = result.get("timing", {}).get("total_seconds", 0)
             news = result.get("news_count", 0)
-            job["log"].append(("✅", f"{sector['name']} — {conf}/10 · {news} articles · {t:.0f}s"))
+            _log("✅", f"{sector['name']} — {conf}/10 · {news} articles · {t:.0f}s")
         return result
 
     try:
-        job["log"].append(("🔍", "Checking LLM connection…"))
+        _log("🔍", "Checking LLM connection…")
         check_llm_health()
-        job["log"].append(("✅", "LLM connected"))
+        _log("✅", "LLM connected")
+
+        _log("🗄️", "Warming up vector database…")
+        try:
+            from vectordb.chroma_store import warm_up as _chroma_warm_up
+            _chroma_warm_up()
+            _log("✅", "Vector database ready")
+        except Exception:
+            _log("⚠️", "Vector database unavailable — continuing without RAG")
 
         total = len(sectors_to_run)
         # Cloud LLM → run all sectors in parallel; local GPU → one at a time
@@ -313,7 +349,9 @@ def _analysis_worker(job: dict, selected_ids: list[str] | None = None):
         else:
             max_parallel = total
             mode_label = f"all {total} in parallel (cloud LLM)"
-        job["log"].append(("🚀", f"Running {total} sector{'s' if total != 1 else ''} — {mode_label}"))
+        _log("🚀", f"Running {total} sector{'s' if total != 1 else ''} — {mode_label}")
+        with _job_lock:
+            job["total_sectors"] = total
 
         with ThreadPoolExecutor(max_workers=max_parallel) as pool:
             futures = {}
@@ -324,31 +362,41 @@ def _analysis_worker(job: dict, selected_ids: list[str] | None = None):
                 futures[future] = sid
 
             for future in as_completed(futures):
+                # Check cancellation
                 if job["cancel"].is_set():
-                    # Also tell the LLM client to abort in-flight calls
                     request_cancellation()
                     job["cancelled"] = True
-                    job["log"].append(("⚠️", "Analysis cancelled by user"))
+                    _log("⚠️", "Analysis cancelled by user")
+                    break
+                # Check hard timeout
+                elapsed = _time.time() - job["started_at"]
+                if elapsed > _MAX_ANALYSIS_SECONDS:
+                    request_cancellation()
+                    job["error"] = f"Timed out after {elapsed:.0f}s (limit: {_MAX_ANALYSIS_SECONDS}s)"
+                    _log("⏰", "Analysis timed out")
                     break
                 try:
                     result = future.result()
-                    job["results"].append(result)
+                    with _job_lock:
+                        job["results"].append(result)
+                        job["completed_sectors"] += 1
                 except PipelineCancelled:
                     sid = futures[future]
                     name = sectors_to_run[sid]["name"]
-                    job["log"].append(("⚠️", f"{name}: cancelled"))
+                    _log("⚠️", f"{name}: cancelled")
                     job["cancelled"] = True
                 except Exception as e:
                     sid = futures[future]
                     name = sectors_to_run[sid]["name"]
-                    job["log"].append(("❌", f"{name}: {e}"))
-                    job["results"].append({
-                        "sector_id": sid,
-                        "sector_name": name,
-                        "error": str(e),
-                    })
+                    _log("❌", f"{name}: {e}")
+                    with _job_lock:
+                        job["results"].append({
+                            "sector_id": sid,
+                            "sector_name": name,
+                            "error": str(e),
+                        })
 
-        if not job.get("cancelled"):
+        if not job.get("cancelled") and not job.get("error"):
             check_old_predictions()
     except Exception as e:
         if type(e).__name__ == 'LLMHealthCheckError':
@@ -369,9 +417,29 @@ def _render_analysis_progress():
     if job["running"]:
         # ── Still running — show live log + cancel button ─────────
         elapsed = _time.time() - job["started_at"]
+        total_s = job["total_sectors"] or 1
+        done_s = job["completed_sectors"]
+        pct = done_s / total_s
+
+        # Progress bar
+        st.progress(pct, text=f"Analyzing {done_s}/{total_s} sectors complete · {elapsed:.0f}s elapsed")
+
         with st.status(f"Running LangGraph pipeline … ({elapsed:.0f}s)", expanded=True):
-            for icon, text in list(job["log"]):  # copy to avoid mutation during iteration
-                st.write(f"{icon} {text}")
+            with _job_lock:
+                log_snapshot = list(job["log"])
+            # Show only last 15 lines to keep it readable, plus first 3
+            if len(log_snapshot) > 18:
+                for icon, text in log_snapshot[:3]:
+                    st.write(f"{icon} {text}")
+                st.caption(f"… {len(log_snapshot) - 18} earlier steps hidden …")
+                for icon, text in log_snapshot[-15:]:
+                    st.write(f"{icon} {text}")
+            else:
+                for icon, text in log_snapshot:
+                    st.write(f"{icon} {text}")
+            timeout_pct = min(elapsed / _MAX_ANALYSIS_SECONDS * 100, 100)
+            if timeout_pct > 75:
+                st.caption(f"⏰ Timeout at {_MAX_ANALYSIS_SECONDS // 60}min — {100 - timeout_pct:.0f}% remaining")
 
         if st.button("⛔ Cancel Analysis", key="cancel_analysis", type="secondary"):
             job["cancel"].set()
@@ -387,6 +455,10 @@ def _render_analysis_progress():
         if job["error"]:
             st.error(f"❌ Analysis failed ({elapsed:.0f}s): {job['error']}")
             st.toast(f"❌ Analysis failed after {elapsed:.0f}s", icon="❌")
+            # Offer retry
+            if st.button("🔄  Retry Analysis", key="retry_analysis", type="primary"):
+                del st.session_state[_JOB_KEY]
+                st.rerun()
         elif job.get("cancelled"):
             n = len(job["results"])
             st.warning(f"⚠️ Analysis cancelled — {n} sector{'s' if n != 1 else ''} completed before cancellation ({elapsed:.0f}s)")
@@ -424,7 +496,7 @@ def _render_analysis_progress():
 
 def _result_card(res: dict):
     """Compact card shown on dashboard after running analysis."""
-    from ui.components import pill_cls
+    from ui.components import pill_cls, friendly_status
 
     conf = res.get("confidence")
     vs = res.get("validation_status", "")
@@ -438,8 +510,9 @@ def _result_card(res: dict):
     with c2:
         st.markdown(f"**{conf}/10**" if conf else "—")
     with c3:
-        if vs:
-            st.markdown(f'<span class="pill {pill_cls(vs)}">{vs}</span>',
+        friendly = friendly_status(vs)
+        if friendly:
+            st.markdown(f'<span class="pill {pill_cls(vs)}">{friendly}</span>',
                         unsafe_allow_html=True)
     with c4:
         st.markdown(f'<span style="color:{ds_color}">● {ds.title() if ds else ""}</span>',

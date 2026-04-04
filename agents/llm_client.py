@@ -143,6 +143,10 @@ _RETRYABLE_ERRORS = (
     "504",
     "overloaded",
     "connection",
+    "empty choices",
+    "has no len",
+    "expecting value",    # malformed JSON from API (transient)
+    "json",               # JSONDecodeError variants
 )
 
 
@@ -292,6 +296,9 @@ def call_llm(
                 **lf_kwargs,
             )
             _check_cancelled()  # bail out if cancelled while waiting
+            # Guard against None choices (some models / Langfuse wrapper)
+            if not response.choices:
+                raise RuntimeError("Model returned empty choices — possibly overloaded")
             content = response.choices[0].message.content or ""
             # Log token usage if available
             if response.usage:

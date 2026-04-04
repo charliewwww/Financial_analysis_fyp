@@ -461,6 +461,26 @@ def purge_old_reports(max_reports: int = MAX_REPORTS) -> list[int]:
     return ids_to_delete
 
 
+def delete_report(report_id: int) -> bool:
+    """Delete a single report by ID. Returns True if a row was deleted."""
+    with _get_conn() as conn:
+        cur = conn.execute("DELETE FROM reports WHERE id = ?", (report_id,))
+        return cur.rowcount > 0
+
+
+def delete_reports(report_ids: list[int]) -> int:
+    """Delete multiple reports by ID. Returns the number of rows deleted."""
+    if not report_ids:
+        return 0
+    with _get_conn() as conn:
+        placeholders = ",".join("?" for _ in report_ids)
+        cur = conn.execute(
+            f"DELETE FROM reports WHERE id IN ({placeholders})",
+            report_ids,
+        )
+        return cur.rowcount
+
+
 def get_report_count() -> int:
     """Return total number of reports stored."""
     with _get_conn() as conn:

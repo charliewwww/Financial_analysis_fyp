@@ -98,7 +98,7 @@ def _make_llm_responses(sufficiency="sufficient", validation="PASSED"):
     reflect = f"VERDICT: {sufficiency.upper()}\nGAPS: None significant.\nREASONING: Good coverage."
     analyze = (
         "## AI & Semiconductors Analysis\n\n"
-        "NVIDIA dominates the AI chip market.\n\n"
+        "NVIDIA dominates the AI chip market. NVDA is trading at $130.50.\n\n"
         "[SOURCE: CNBC] NVDA beat earnings.\n\n"
         "## PRICE PREDICTIONS\n"
         "**NVDA**: BULLISH | Expected move: +3% to +7%\n"
@@ -110,6 +110,9 @@ def _make_llm_responses(sufficiency="sufficient", validation="PASSED"):
         "The analysis is well-reasoned with source citations.\n"
     )
     if validation == "FAILED":
+        # Also put a wrong price in the analysis so programmatic layer
+        # flags FAILED too (both layers must agree for overall FAILED).
+        analyze = analyze.replace("$130.50", "$999.00")
         validate += "⚠️ DISCREPANCY: Made up revenue number.\n"
     return summarize, reflect, analyze, validate
 
