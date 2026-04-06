@@ -586,4 +586,27 @@ div[style*="rgba(100,116,139,0.08)"] { background: rgba(100,116,139,0.12) !impor
 div[style*="rgba(100,116,139,0.05)"] { background: rgba(100,116,139,0.1) !important; }
 /* Streamlit divider */
 [data-testid="stHorizontalRule"] { border-color: #334155 !important; }
+/* Toggle switch */
+[data-testid="stToggle"] label span { color: #e2e8f0 !important; }
+/* Radio buttons text */
+.stRadio > div[role="radiogroup"] label { color: #e2e8f0 !important; }
+/* Dropdown menu items */
+[data-baseweb="menu"] li { background: #1e293b !important; color: #e2e8f0 !important; }
+[data-baseweb="menu"] li:hover { background: #334155 !important; }
+/* Popover / tooltip */
+[data-baseweb="popover"] { background: #1e293b !important; }
+/* Progress bar track */
+[data-testid="stProgress"] > div { background: #334155 !important; }
+/* Button text in dark mode */
+button[data-testid="stBaseButton-secondary"] { color: #e2e8f0 !important; }
+button[data-testid="stBaseButton-minimal"] { color: #e2e8f0 !important; }
+/* Status widget */
+[data-testid="stStatusWidget"] { background: #1e293b !important; border-color: #334155 !important; }
+[data-testid="stStatusWidget"] p { color: #e2e8f0 !important; }
+/* Toast notifications */
+[data-testid="stToast"] { background: #1e293b !important; color: #e2e8f0 !important; border-color: #334155 !important; }
+/* Macro gauge dark mode */
+.macro-gauge { background: #1e293b !important; border-color: #334155 !important; }
+.macro-gauge-name { color: #94a3b8 !important; }
+.macro-gauge-val { color: #e2e8f0 !important; }
 </style>"""

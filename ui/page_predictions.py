@@ -93,7 +93,7 @@ def render():
 
     if not reports_with_preds:
         st.info(
-            "**No predictions yet.** Run an analysis from the Dashboard — "
+            "**No predictions yet.** Run an analysis from the Overview page — "
             "the AI will generate directional predictions for each stock "
             "in the analysed sectors."
         )

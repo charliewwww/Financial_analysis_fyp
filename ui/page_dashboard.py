@@ -11,7 +11,7 @@ import html
 import threading
 import time as _time
 
-_MAX_ANALYSIS_SECONDS = 900  # 15-minute hard timeout
+_MAX_ANALYSIS_SECONDS = 1800  # 30-minute hard timeout
 
 from config.sectors import SECTORS
 # NOTE: workflow / LLM imports are LAZY (inside _analysis_worker)
@@ -53,8 +53,170 @@ def _cached_sector_prices():
 
 
 def _open_report(report_id: int):
-    st.session_state.page = "Reports"
+    st.session_state.page = "Analysis"
     st.session_state.selected_report_id = report_id
+
+
+# ── Market Pulse & Delta helpers ──────────────────────────────────
+
+@st.cache_data(ttl=60)
+def _cached_market_pulse():
+    """Load key signals, anomalies, and theses from latest report per sector."""
+    from database.reports_db import get_report_by_id
+    from ui.components import extract_signals, extract_thesis, load_state
+
+    reports = _cached_reports_list(limit=50)
+    if not reports:
+        return {"signals": [], "anomalies": [], "theses": [], "last_analysis": None}
+
+    seen_sectors = set()
+    signals, anomalies, theses = [], [], []
+    last_analysis = reports[0]["created_at"] if reports else None
+
+    for r in reports:
+        sid = r["sector_id"]
+        if sid in seen_sectors:
+            continue
+        seen_sectors.add(sid)
+
+        full = get_report_by_id(r["id"])
+        if not full:
+            continue
+
+        analysis = full.get("analysis", "")
+        thesis = extract_thesis(analysis)
+        if thesis:
+            theses.append({"sector": r["sector_name"], "sector_id": sid, "thesis": thesis})
+
+        for s in extract_signals(analysis)[:3]:
+            s["sector"] = r["sector_name"]
+            signals.append(s)
+
+        state = load_state(full)
+        if state:
+            for a in state.get("anomaly_alerts", []):
+                a["sector"] = r["sector_name"]
+                anomalies.append(a)
+
+    return {
+        "signals": signals,
+        "anomalies": anomalies,
+        "theses": theses,
+        "last_analysis": last_analysis,
+    }
+
+
+@st.cache_data(ttl=60)
+def _cached_sector_deltas():
+    """Compare latest vs previous report per sector."""
+    reports = _cached_reports_list(limit=50)
+    if not reports:
+        return []
+
+    by_sector: dict[str, list] = {}
+    for r in reports:
+        sid = r["sector_id"]
+        by_sector.setdefault(sid, []).append(r)
+
+    deltas = []
+    for sid, rpts in by_sector.items():
+        if len(rpts) < 2:
+            continue
+        latest, prev = rpts[0], rpts[1]
+        conf_now = latest.get("confidence_score") or 0
+        conf_prev = prev.get("confidence_score") or 0
+        deltas.append({
+            "sector": latest["sector_name"],
+            "sector_id": sid,
+            "current": conf_now,
+            "previous": conf_prev,
+            "delta": round(conf_now - conf_prev, 1),
+        })
+    return deltas
+
+
+def _render_market_pulse(pulse: dict):
+    """Render the Market Pulse section — key alerts and signals."""
+    anomaly_count = len(pulse["anomalies"])
+    high_sev = [a for a in pulse["anomalies"] if a.get("severity") == "high"]
+    bullish = [s for s in pulse["signals"] if s.get("direction") == "BULLISH"]
+    bearish = [s for s in pulse["signals"] if s.get("direction") == "BEARISH"]
+
+    with st.container(border=True):
+        hdr_l, hdr_r = st.columns([3, 1])
+        with hdr_l:
+            st.markdown('<span class="section-title" style="font-size:1.1rem">⚡ Market Pulse</span>',
+                        unsafe_allow_html=True)
+        with hdr_r:
+            if pulse["last_analysis"]:
+                st.caption(f"Last scan: {to_hkt_short(pulse['last_analysis'])}")
+
+        # Summary stat bar
+        stat_parts = []
+        if high_sev:
+            stat_parts.append(f'<span style="color:#ef4444;font-weight:700">🔴 {len(high_sev)} critical alert{"s" if len(high_sev)!=1 else ""}</span>')
+        elif anomaly_count:
+            stat_parts.append(f'<span style="color:#f59e0b;font-weight:700">⚠️ {anomaly_count} anomal{"ies" if anomaly_count!=1 else "y"}</span>')
+        if bullish:
+            stat_parts.append(f'<span style="color:#22c55e;font-weight:700">📈 {len(bullish)} bullish</span>')
+        if bearish:
+            stat_parts.append(f'<span style="color:#ef4444;font-weight:700">📉 {len(bearish)} bearish</span>')
+        if stat_parts:
+            st.markdown(
+                '<div style="display:flex;gap:16px;flex-wrap:wrap;font-size:0.85rem;margin-bottom:0.5rem">'
+                + " ".join(stat_parts) + '</div>',
+                unsafe_allow_html=True)
+
+        # High-severity anomaly alerts
+        for a in high_sev[:3]:
+            st.markdown(
+                f'🔴 **{a.get("ticker", "?")}** [{a.get("signal_type", "?")}] — '
+                f'{a.get("description", "N/A")}')
+
+        # Sector theses
+        for t in pulse["theses"]:
+            thesis_short = t["thesis"][:180] + ("…" if len(t["thesis"]) > 180 else "")
+            st.markdown(f'📋 **{t["sector"]}** — {thesis_short}')
+
+        # Top signal cards (compact grid)
+        top_signals = pulse["signals"][:6]
+        if top_signals:
+            cols = st.columns(min(len(top_signals), 3))
+            for i, sig in enumerate(top_signals):
+                with cols[i % len(cols)]:
+                    d = sig.get("direction", "NEUTRAL")
+                    icon = {"BULLISH": "📈", "BEARISH": "📉"}.get(d, "➡️")
+                    color = {"BULLISH": "#22c55e", "BEARISH": "#ef4444"}.get(d, "#94a3b8")
+                    move_text = f' · {html.escape(sig["move"])}' if sig.get("move") else ""
+                    st.markdown(
+                        f'<div style="padding:8px 12px;border-radius:10px;'
+                        f'border:1px solid var(--outline-variant);margin-bottom:4px">'
+                        f'<span style="font-weight:800;font-family:Manrope,sans-serif">'
+                        f'{html.escape(sig["ticker"])}</span> '
+                        f'<span style="color:{color};font-weight:700;font-size:0.82rem">'
+                        f'{icon} {d}{move_text}</span></div>',
+                        unsafe_allow_html=True)
+
+
+def _render_sector_deltas(deltas: list[dict]):
+    """Render the 'What Changed' section showing evidence score movement."""
+    if not deltas:
+        return
+    with st.container(border=True):
+        st.markdown('<span class="section-title">📊 What Changed</span>',
+                    unsafe_allow_html=True)
+        st.caption("Evidence score movement since previous analysis")
+        for d in deltas:
+            arrow = "↑" if d["delta"] > 0 else ("↓" if d["delta"] < 0 else "→")
+            color = "#22c55e" if d["delta"] > 0 else ("#ef4444" if d["delta"] < 0 else "#94a3b8")
+            st.markdown(
+                f'<div style="display:flex;justify-content:space-between;align-items:center;'
+                f'padding:0.5rem 0;border-bottom:1px solid var(--outline-variant)">'
+                f'<span style="font-weight:600;font-size:0.88rem">{html.escape(d["sector"])}</span>'
+                f'<span style="font-weight:700;color:{color};font-size:0.88rem">'
+                f'{d["previous"]:.1f} → {d["current"]:.1f} '
+                f'<span style="font-size:0.75rem">{arrow} {d["delta"]:+.1f}</span></span></div>',
+                unsafe_allow_html=True)
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -65,8 +227,8 @@ def render():
     # Invisible heading for structure — page title is in the top bar area
     st.markdown('<h2 style="font-family:Manrope,sans-serif;font-weight:800;'
                 'letter-spacing:-0.03em;color:var(--on-surface);margin-bottom:0.5rem">'
-                'Command Centre</h2>', unsafe_allow_html=True)
-    st.caption("Live intelligence feed and multi-agent analysis dashboard")
+                'Overview</h2>', unsafe_allow_html=True)
+    st.caption("Market intelligence and second-order signal detection")
 
     all_rpts = _cached_reports_list(limit=50)
     stats = _cached_prediction_stats()
@@ -79,13 +241,13 @@ def render():
             'border-radius:1.5rem;padding:2rem 2.5rem;margin-bottom:1.5rem">'
             '<h3 style="font-family:Manrope,sans-serif;font-weight:800;'
             'letter-spacing:-0.02em;margin:0 0 0.5rem 0;color:var(--on-surface)">'
-            'Welcome to Supply Chain Alpha</h3>'
+            'Welcome to Alpha Lens</h3>'
             '<p style="color:var(--on-surface-variant);font-size:0.9rem;line-height:1.7;margin:0">'
             'Your AI-powered finance intelligence platform. It analyses stocks across '
             '<strong>3 sectors</strong> using multi-agent reasoning — pulling live news, '
             'SEC filings, technical indicators, and macroeconomic data — then validates '
             'every claim against real numbers.<br><br>'
-            '👇 <strong>Scroll down and click "Run Full Analysis"</strong> to generate your first report.</p>'
+            '👇 <strong>Click Run Analysis below</strong> to generate your first report.</p>'
             '</div>',
             unsafe_allow_html=True)
 
@@ -111,11 +273,46 @@ def render():
                 f"📦 **{report_total}/{MAX_REPORTS} report slots used** — {remaining} left before auto-cleanup. "
                 "Download reports you want to keep. Predictions are always preserved.")
 
+    # ── Compact Run Analysis bar ──────────────────────────────────
+    all_sector_ids = list(SECTORS.keys())
+    all_sector_names = [SECTORS[s]["name"] for s in all_sector_ids]
+
+    with st.container(border=True):
+        cta_l, cta_r = st.columns([4, 1])
+        with cta_l:
+            selected_names = st.multiselect(
+                "Sectors to analyse",
+                options=all_sector_names,
+                default=all_sector_names,
+                label_visibility="collapsed",
+            )
+        with cta_r:
+            _name_to_id = {SECTORS[s]["name"]: s for s in all_sector_ids}
+            selected_ids = [_name_to_id[n] for n in selected_names if n in _name_to_id]
+            run = st.button("🚀 Run Analysis", type="primary",
+                            disabled=len(selected_ids) == 0,
+                            use_container_width=True)
+
+    if run and selected_ids:
+        _start_background_analysis(selected_ids)
+
+    # ── Show progress / results from background thread ────────────
+    _render_analysis_progress()
+
+    st.write("")
+
+    # ── Market Pulse (key signals from latest reports) ────────────
+    if all_rpts:
+        pulse = _cached_market_pulse()
+        if pulse["signals"] or pulse["anomalies"] or pulse["theses"]:
+            _render_market_pulse(pulse)
+            st.write("")
+
     # ── KPI row ───────────────────────────────────────────────────
     k1, k2, k3, k4 = st.columns(4)
     kpi_data = [
-        (k1, "Total Reports", str(len(all_rpts)), ""),
-        (k2, "Avg Confidence", f"{avg_conf}", "/ 10.0"),
+        (k1, "Reports Generated", str(len(all_rpts)), ""),
+        (k2, "Evidence Score", f"{avg_conf}", "/ 10.0"),
         (k3, "Active Predictions", str(stats['total_predictions']), ""),
         (k4, "Verified Accuracy", f"{stats['checked']}", f"/ {stats['total_predictions']}"),
     ]
@@ -176,14 +373,14 @@ def render():
                 st.markdown('<span class="section-title" style="font-size:1.35rem">' 
                             'Intelligence Feed</span>', unsafe_allow_html=True)
             with hdr_r:
-                if st.button("View All Activity →", key="view_all_rpts", type="tertiary"):
-                    st.session_state.page = "Reports"
+                if st.button("View All →", key="view_all_rpts", type="tertiary"):
+                    st.session_state.page = "Analysis"
                     st.rerun()
 
             st.write("")
             recent = all_rpts[:8]
             if not recent:
-                st.caption("No reports yet — run your first analysis below.")
+                st.caption("No reports yet — run your first analysis above.")
             else:
                 for r in recent:
                     report_row(r, f"dash_{r['id']}", _open_report)
@@ -195,7 +392,7 @@ def render():
         with st.container(border=True):
             ci_l, ci_r = st.columns([1, 1])
             with ci_l:
-                st.markdown('<span class="section-title">Confidence Index</span>',
+                st.markdown('<span class="section-title">Evidence Score</span>',
                             unsafe_allow_html=True)
                 st.write("")
                 st.markdown(ring_svg(avg_conf, size=144), unsafe_allow_html=True)
@@ -208,7 +405,7 @@ def render():
                                 'font-size:0.625rem;font-weight:800;border-radius:9999px;'
                                 'text-transform:uppercase;letter-spacing:0.1em">'
                                 'Optimal Range</span>', unsafe_allow_html=True)
-                st.caption(f"Systemic confidence is weighted based on "
+                st.caption(f"Objective data-quality score based on "
                            f"**{len(all_rpts)} reports** across all sectors.")
 
             # ── Confidence Trend (mini chart) ─────────────────
@@ -277,54 +474,13 @@ def render():
 
     st.write("")
 
-    # ── Run analysis CTA — Automated Reasoning Engine ──────────
-    st.markdown('<div class="cta-section">', unsafe_allow_html=True)
-    cta_left, cta_right = st.columns([3, 2])
+    # ── What Changed (delta between latest and previous) ──────────
+    if all_rpts:
+        deltas = _cached_sector_deltas()
+        if deltas:
+            _render_sector_deltas(deltas)
 
-    all_sector_ids = list(SECTORS.keys())
-    all_sector_names = [SECTORS[s]["name"] for s in all_sector_ids]
-
-    with cta_left:
-        st.markdown('<span class="section-title-lg">Automated Reasoning Engine</span>',
-                    unsafe_allow_html=True)
-        st.markdown('<p style="color:var(--on-surface-variant);font-size:0.9rem;line-height:1.7;'
-                    'margin-top:0.5rem">'
-                    'Scale your research by deploying multi-agent swarms. The engine '
-                    'synchronizes SEC filings with real-world logistical data for '
-                    '360° visibility.</p>', unsafe_allow_html=True)
-
-        selected_names = st.multiselect(
-            "Sectors to analyse",
-            options=all_sector_names,
-            default=all_sector_names,
-            label_visibility="collapsed",
-        )
-
-    with cta_right:
-        st.write("")
-        st.write("")
-        st.write("")
-        _name_to_id = {SECTORS[s]["name"]: s for s in all_sector_ids}
-        selected_ids = [_name_to_id[n] for n in selected_names if n in _name_to_id]
-
-        run = st.button("🚀  Run Full Analysis", type="primary",
-                        disabled=len(selected_ids) == 0,
-                        use_container_width=True)
-        est_minutes = max(2, len(selected_ids) * 2)
-        st.markdown(f'<div style="display:flex;align-items:center;gap:6px;'
-                    f'justify-content:center;margin-top:0.5rem">'
-                    f'<span style="width:6px;height:6px;background:#22c55e;'
-                    f'border-radius:9999px;display:inline-block"></span>'
-                    f'<span class="micro-label">Ready · {len(selected_ids)} sectors · ~{est_minutes}min</span>'
-                    f'</div>', unsafe_allow_html=True)
-
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    if run and selected_ids:
-        _start_background_analysis(selected_ids)
-
-    # ── Show progress / results from background thread ────────────
-    _render_analysis_progress()
+    st.write("")
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -458,6 +614,10 @@ def _analysis_worker(job: dict, selected_ids: list[str] | None = None):
             for i, (sid, sector) in enumerate(sectors_to_run.items(), 1):
                 if job["cancel"].is_set():
                     break
+                # Stagger sector launches to avoid simultaneous LLM calls
+                # hitting rate limits (especially on free-tier providers)
+                if i > 1 and max_parallel > 1:
+                    _time.sleep(5)
                 future = pool.submit(_run_one, sid, sector, i, total)
                 futures[future] = sid
 

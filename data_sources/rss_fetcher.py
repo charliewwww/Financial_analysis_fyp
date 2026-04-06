@@ -272,7 +272,7 @@ def _count_per_ticker(articles: list[dict], tickers: list[str]) -> dict[str, int
         text = (article.get("title", "") + " " + article.get("summary", "")
                 + " " + article.get("relevance", "")).upper()
         for ticker in tickers:
-            if ticker in text:
+            if re.search(rf'(?<![A-Z]){re.escape(ticker)}(?![A-Z])', text):
                 counts[ticker] += 1
     return counts
 

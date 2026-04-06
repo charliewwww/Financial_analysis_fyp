@@ -120,23 +120,29 @@ class LLMResponse:
 
 # ── Singleton client (connection pooling) ─────────────────────────
 _client: OpenAI | None = None
+_client_lock = threading.Lock()
 
 
 def _get_client() -> OpenAI:
     """Return a cached OpenAI client — reuses HTTP connections across calls."""
     global _client
     if _client is None:
-        _client = OpenAI(
-            api_key=LLM_API_KEY,
-            base_url=LLM_BASE_URL,
-            timeout=LLM_TIMEOUT,
-        )
+        with _client_lock:
+            if _client is None:
+                _client = OpenAI(
+                    api_key=LLM_API_KEY,
+                    base_url=LLM_BASE_URL,
+                    timeout=LLM_TIMEOUT,
+                )
     return _client
 
 
 # ── Retryable exceptions ──────────────────────────────────────────
 _RETRYABLE_ERRORS = (
     "rate_limit",
+    "rate-limit",         # hyphenated variant (OpenRouter uses this)
+    "rate limit",         # space-separated variant
+    "429",                # HTTP 429 status code in error string
     "timeout",
     "502",
     "503",
@@ -156,9 +162,18 @@ def _is_retryable(exc: Exception) -> bool:
     return any(kw in msg for kw in _RETRYABLE_ERRORS)
 
 
-def _retry_delay(attempt: int) -> float:
-    """Exponential backoff with jitter: base * 2^attempt ± 25%."""
-    delay = LLM_RETRY_BASE_DELAY * (2 ** attempt)
+def _retry_delay(attempt: int, exc: Exception | None = None) -> float:
+    """Exponential backoff with jitter: base * 2^attempt ± 25%.
+
+    Rate-limit errors (429) use a longer base delay because the upstream
+    provider needs cooldown time before accepting new requests.
+    """
+    base = LLM_RETRY_BASE_DELAY
+    # Rate-limit errors need much longer backoff (upstream provider cooldown)
+    if exc and any(kw in str(exc).lower() for kw in ("429", "rate")):
+        base = max(base, 15.0)  # At least 15s for rate limits
+        logger.info("Rate-limit detected — using extended backoff (base=%.0fs)", base)
+    delay = base * (2 ** attempt)
     jitter = delay * 0.25 * (2 * _random.random() - 1)  # ±25%
     return delay + jitter
 
@@ -315,7 +330,7 @@ def call_llm(
         except Exception as e:
             last_exc = e
             if attempt < LLM_MAX_RETRIES and _is_retryable(e):
-                delay = _retry_delay(attempt)
+                delay = _retry_delay(attempt, e)
                 logger.warning("LLM call failed (attempt %d/%d): %s — retrying in %.1fs",
                                attempt + 1, LLM_MAX_RETRIES + 1, e, delay)
                 # Interruptible sleep — wakes up if cancellation is requested
@@ -396,7 +411,7 @@ def call_llm_with_metadata(
         except Exception as e:
             last_exc = e
             if attempt < LLM_MAX_RETRIES and _is_retryable(e):
-                delay = _retry_delay(attempt)
+                delay = _retry_delay(attempt, e)
                 logger.warning("LLM call [metadata] failed (attempt %d/%d): %s — retrying in %.1fs",
                                attempt + 1, LLM_MAX_RETRIES + 1, e, delay)
                 if _cancel_event.wait(timeout=delay):

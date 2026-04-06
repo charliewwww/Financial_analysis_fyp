@@ -48,19 +48,22 @@ def _safe_markdown_html(text: str) -> str:
     """
     # Temporarily extract bold phrases before escaping
     bold_re = re.compile(r'\*\*(.+?)\*\*')
-    # Replace bold markers with unique placeholders
+    # Use a unique marker that cannot appear in LLM output
+    _MARKER = "XBOLD_7f3a9c_"
+    # Defense-in-depth: strip any pre-existing marker patterns from input
+    text = text.replace(_MARKER, "")
     placeholders: list[str] = []
     def _save_bold(m):
         placeholders.append(m.group(1))
-        return f'\x00BOLD{len(placeholders) - 1}\x00'
+        return f'{_MARKER}{len(placeholders) - 1}_END'
     text = bold_re.sub(_save_bold, text)
 
-    # Escape everything for safety
+    # Escape everything for safety (markers are alphanumeric, unaffected)
     text = html.escape(text)
 
     # Restore bold placeholders as <strong>
     for i, phrase in enumerate(placeholders):
-        text = text.replace(f'\x00BOLD{i}\x00', f'<strong>{html.escape(phrase)}</strong>')
+        text = text.replace(f'{_MARKER}{i}_END', f'<strong>{html.escape(phrase)}</strong>')
 
     # Convert markdown-style bullets to styled list
     text = re.sub(r'(?m)^[\-\*•]\s+', '• ', text)
@@ -95,7 +98,7 @@ def render():
 
 def _report_list_page():
     st.markdown('<h2 style="font-family:Manrope,sans-serif;font-weight:800;'
-                'letter-spacing:-0.03em;color:var(--on-surface)">Reports</h2>',
+                'letter-spacing:-0.03em;color:var(--on-surface)">Analysis</h2>',
                 unsafe_allow_html=True)
 
     c1, _, c_del = st.columns([2, 3, 1])
@@ -115,7 +118,7 @@ def _report_list_page():
 
     reports = _cached_reports_list(sector_id=sid, limit=50)
     if not reports:
-        st.info("No reports yet. Run an analysis from the Dashboard.")
+        st.info("No reports yet. Run an analysis from the Overview page.")
         return
 
     with c_del:
@@ -253,7 +256,7 @@ def _report_detail(report: dict):
     strip_html = (
         '<div class="metric-strip">'
         f'<div class="metric-chip">'
-        f'<div class="metric-chip-label">Score</div>'
+        f'<div class="metric-chip-label">Evidence</div>'
         f'<div class="metric-chip-value">{conf}<span style="font-size:0.7rem;color:var(--on-surface-variant)">/ 10</span></div></div>'
         f'<div class="metric-chip">'
         f'<div class="metric-chip-label">Validation</div>'
@@ -276,6 +279,24 @@ def _report_detail(report: dict):
     st.markdown(strip_html, unsafe_allow_html=True)
 
     st.write("")
+
+    # ── Anomaly alerts (high-urgency — shown before analysis text) ─
+    if state:
+        anomalies = state.get("anomaly_alerts", [])
+        if anomalies:
+            with st.container(border=True):
+                st.markdown('<span class="section-title">⚡ Anomaly Alerts</span>',
+                            unsafe_allow_html=True)
+                st.caption("Auto-detected unusual signals from technical data")
+                for a in anomalies:
+                    sev = a.get("severity", "?")
+                    icon = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(sev, "⚪")
+                    st.markdown(
+                        f"{icon} **{a.get('ticker', '?')}** "
+                        f"[{a.get('signal_type', '?')}] — "
+                        f"{a.get('description', 'N/A')}"
+                    )
+            st.write("")
 
     # ── Segmented analysis sections ─────────────────────────────────
     news_json = report.get("news_snapshot")
@@ -357,7 +378,7 @@ def _report_detail(report: dict):
     left, right = st.columns(2)
     with left:
         with st.container(border=True):
-            st.markdown('<span class="section-title">Confidence Breakdown</span>',
+            st.markdown('<span class="section-title">Evidence Breakdown</span>',
                         unsafe_allow_html=True)
             st.caption("Objective score — calculated from data quality, not AI self-assessment")
             _render_confidence_breakdown(report, state)
@@ -397,24 +418,6 @@ def _report_detail(report: dict):
                 st.warning(iss)
 
     st.write("")
-
-    # ── Anomaly alerts ────────────────────────────────────────────
-    if state:
-        anomalies = state.get("anomaly_alerts", [])
-        if anomalies:
-            with st.container(border=True):
-                st.markdown('<span class="section-title">⚡ Anomaly Alerts</span>',
-                            unsafe_allow_html=True)
-                st.caption("Auto-detected unusual signals from technical data")
-                for a in anomalies:
-                    sev = a.get("severity", "?")
-                    icon = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(sev, "⚪")
-                    st.markdown(
-                        f"{icon} **{a.get('ticker', '?')}** "
-                        f"[{a.get('signal_type', '?')}] — "
-                        f"{a.get('description', 'N/A')}"
-                    )
-            st.write("")
 
     # ── Evidence trail ────────────────────────────────────────────
     with st.container(border=True):

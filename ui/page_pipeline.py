@@ -219,10 +219,10 @@ def render():
     st.markdown(
         '<h1 style="font-family:Manrope,sans-serif;font-size:1.75rem;'
         'font-weight:800;letter-spacing:-0.03em;margin-bottom:0.5rem">'
-        '⚙️ Pipeline</h1>',
+        '⚙️ System</h1>',
         unsafe_allow_html=True,
     )
-    st.caption("LangGraph topology · Node details · Langfuse tracing")
+    st.caption("Analysis pipeline · Node details · System configuration")
 
     # ── Two-column layout: graph + info ───────────────────────────
     col_graph, col_info = st.columns([3, 2], gap="large")

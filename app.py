@@ -7,8 +7,8 @@ Thin router — delegates to page modules in ui/ for all rendering.
 import streamlit as st
 
 st.set_page_config(
-    page_title="Supply Chain Alpha",
-    page_icon="🔗",
+    page_title="Alpha Lens",
+    page_icon="🔍",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -19,6 +19,10 @@ st.markdown(GLOBAL_CSS, unsafe_allow_html=True)
 # Apply dark mode immediately if previously toggled (avoids flash)
 if st.session_state.get("dark_mode"):
     st.markdown(DARK_MODE_CSS, unsafe_allow_html=True)
+    # Set data-theme attribute so CSS [data-theme="dark"] tokens activate
+    st.markdown(
+        '<script>document.documentElement.setAttribute("data-theme","dark");</script>',
+        unsafe_allow_html=True)
 
 # ── Imports (after CSS so first paint is fast) ────────────────────
 from config.logging_config import setup_logging
@@ -31,12 +35,12 @@ from ui import page_dashboard, page_reports, page_predictions, page_supply_chain
 # ═══════════════════════════════════════════════════════════════════
 # NAVIGATION
 # ═══════════════════════════════════════════════════════════════════
-PAGES = ["Dashboard", "Supply Chain", "Reports", "Predictions", "Pipeline"]
+PAGES = ["Overview", "Supply Chain", "Analysis", "Predictions", "System"]
 
 
 def _init_session():
     if "page" not in st.session_state:
-        st.session_state.page = "Dashboard"
+        st.session_state.page = "Overview"
     if "selected_report_id" not in st.session_state:
         st.session_state.selected_report_id = None
 
@@ -122,11 +126,11 @@ def main():
             '<div style="margin-bottom:2rem">'
             '<h1 style="font-family:Manrope,sans-serif;font-size:1.15rem;'
             'font-weight:800;letter-spacing:-0.02em;line-height:1.3;margin:0">'
-            '<span style="color:var(--primary)">SUPPLY CHAIN</span><br>'
-            '<span style="color:var(--on-surface)">ALPHA</span></h1>'
+            '<span style="color:var(--primary)">ALPHA</span><br>'
+            '<span style="color:var(--on-surface)">LENS</span></h1>'
             '<p style="font-size:0.5625rem;color:var(--on-surface-variant);font-weight:800;'
             'letter-spacing:0.2em;text-transform:uppercase;margin-top:0.5rem">'
-            'Intelligent Curator</p></div>',
+            'Second-Order Intelligence</p></div>',
             unsafe_allow_html=True)
 
         idx = PAGES.index(st.session_state.page) if st.session_state.page in PAGES else 0
@@ -134,7 +138,7 @@ def main():
 
         if page != st.session_state.page:
             st.session_state.page = page
-            if page != "Reports":
+            if page != "Analysis":
                 st.session_state.selected_report_id = None
             st.rerun()
 
@@ -152,6 +156,13 @@ def main():
 
         if st.session_state.get("dark_mode"):
             st.markdown(DARK_MODE_CSS, unsafe_allow_html=True)
+            st.markdown(
+                '<script>document.documentElement.setAttribute("data-theme","dark");</script>',
+                unsafe_allow_html=True)
+        else:
+            st.markdown(
+                '<script>document.documentElement.removeAttribute("data-theme");</script>',
+                unsafe_allow_html=True)
 
         st.write("")
         st.markdown(
@@ -164,11 +175,11 @@ def main():
             unsafe_allow_html=True)
 
     # Route to page module
-    {"Dashboard": page_dashboard.render,
+    {"Overview": page_dashboard.render,
      "Supply Chain": page_supply_chain.render,
-     "Reports": page_reports.render,
+     "Analysis": page_reports.render,
      "Predictions": page_predictions.render,
-     "Pipeline": page_pipeline.render}[st.session_state.page]()
+     "System": page_pipeline.render}[st.session_state.page]()
 
 
 if __name__ == "__main__":

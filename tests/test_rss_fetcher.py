@@ -6,7 +6,11 @@ No real network calls — all feeds are mocked.
 
 import pytest
 from unittest.mock import MagicMock, patch
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+
+# Use a recent date so articles aren't filtered by NEWS_MAX_AGE_DAYS
+_now = datetime.now(timezone.utc) - timedelta(hours=6)
+_RECENT_DATE = (_now.year, _now.month, _now.day, _now.hour, 0, 0, 0, 0, 0)
 
 
 class TestFetchNewsForSector:
@@ -20,13 +24,13 @@ class TestFetchNewsForSector:
         mock_entry_relevant = MagicMock()
         mock_entry_relevant.title = "NVIDIA launches new AI chip for data centers"
         mock_entry_relevant.summary = "Semiconductor giant NVIDIA unveils next-gen GPU"
-        mock_entry_relevant.published_parsed = (2026, 2, 19, 12, 0, 0, 0, 0, 0)
+        mock_entry_relevant.published_parsed = _RECENT_DATE
         mock_entry_relevant.link = "https://example.com/nvidia"
 
         mock_entry_irrelevant = MagicMock()
         mock_entry_irrelevant.title = "Weather forecast for Florida"
         mock_entry_irrelevant.summary = "Sunny skies expected all week"
-        mock_entry_irrelevant.published_parsed = (2026, 2, 19, 12, 0, 0, 0, 0, 0)
+        mock_entry_irrelevant.published_parsed = _RECENT_DATE
         mock_entry_irrelevant.link = "https://example.com/weather"
 
         mock_feed = MagicMock()
@@ -72,7 +76,7 @@ class TestFetchNewsForSector:
         mock_entry = MagicMock()
         mock_entry.title = "NVDA stock surges on AI demand"
         mock_entry.summary = "NVIDIA shares jump 5%"
-        mock_entry.published_parsed = (2026, 2, 19, 12, 0, 0, 0, 0, 0)
+        mock_entry.published_parsed = _RECENT_DATE
         mock_entry.link = "https://example.com/nvda"
 
         mock_feed = MagicMock()
@@ -148,7 +152,7 @@ class TestParseEntry:
         entry = MagicMock()
         entry.title = "Test Article"
         entry.summary = "<p>Some <b>HTML</b> content</p>"
-        entry.published_parsed = (2026, 2, 19, 10, 0, 0, 0, 0, 0)
+        entry.published_parsed = _RECENT_DATE
         entry.link = "https://example.com"
 
         result = _parse_entry(entry, "TestFeed")
