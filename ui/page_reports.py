@@ -2,7 +2,9 @@
 Reports page — list view + detail view, driven by session state.
 """
 
+import html
 import json
+import re
 import streamlit as st
 
 from config.sectors import SECTORS
@@ -12,6 +14,7 @@ from ui.components import (
     SECTOR_COLORS, ring_svg, pill_cls, load_state, linkify_sources, report_row,
     friendly_status, extract_signals, extract_thesis, split_analysis_sections,
     extract_highlights, extract_geopolitical_notes,
+    plotly_theme,
 )
 from utils.time_utils import to_hkt, to_hkt_short
 
@@ -37,6 +40,38 @@ def _back_to_list():
     st.session_state.selected_report_id = None
 
 
+def _safe_markdown_html(text: str) -> str:
+    """Escape LLM text for safe HTML injection, then restore markdown formatting.
+
+    Converts **bold** → <strong>, bullet lines → list items, and
+    double-newlines → <br> for readable rendering inside unsafe_allow_html.
+    """
+    # Temporarily extract bold phrases before escaping
+    bold_re = re.compile(r'\*\*(.+?)\*\*')
+    # Replace bold markers with unique placeholders
+    placeholders: list[str] = []
+    def _save_bold(m):
+        placeholders.append(m.group(1))
+        return f'\x00BOLD{len(placeholders) - 1}\x00'
+    text = bold_re.sub(_save_bold, text)
+
+    # Escape everything for safety
+    text = html.escape(text)
+
+    # Restore bold placeholders as <strong>
+    for i, phrase in enumerate(placeholders):
+        text = text.replace(f'\x00BOLD{i}\x00', f'<strong>{html.escape(phrase)}</strong>')
+
+    # Convert markdown-style bullets to styled list
+    text = re.sub(r'(?m)^[\-\*•]\s+', '• ', text)
+
+    # Paragraphs
+    text = text.replace('\n\n', '<br><br>')
+    text = text.replace('\n', '<br>')
+
+    return text
+
+
 # ═══════════════════════════════════════════════════════════════════
 # PAGE ENTRY POINT
 # ═══════════════════════════════════════════════════════════════════
@@ -60,7 +95,7 @@ def render():
 
 def _report_list_page():
     st.markdown('<h2 style="font-family:Manrope,sans-serif;font-weight:800;'
-                'letter-spacing:-0.03em;color:#0f172a">Reports</h2>',
+                'letter-spacing:-0.03em;color:var(--on-surface)">Reports</h2>',
                 unsafe_allow_html=True)
 
     c1, _, c_del = st.columns([2, 3, 1])
@@ -160,7 +195,7 @@ def _report_detail(report: dict):
     conf = report.get("confidence_score", 0) or 0
     date_str = to_hkt(report["created_at"])
     st.markdown(f'<h2 style="font-family:Manrope,sans-serif;font-weight:800;'
-                f'letter-spacing:-0.03em;color:#0f172a;margin-bottom:0">{report["sector_name"]}</h2>',
+                f'letter-spacing:-0.03em;color:var(--on-surface);margin-bottom:0">{report["sector_name"]}</h2>',
                 unsafe_allow_html=True)
     st.caption(f"Report #{report['id']} · {date_str}")
 
@@ -171,7 +206,7 @@ def _report_detail(report: dict):
         st.markdown(
             f'<div class="thesis-banner">'
             f'<div class="thesis-label">Thesis</div>'
-            f'<div class="thesis-text">{thesis}</div></div>',
+            f'<div class="thesis-text">{html.escape(thesis)}</div></div>',
             unsafe_allow_html=True,
         )
 
@@ -182,12 +217,12 @@ def _report_detail(report: dict):
         for sig in signals:
             d = sig["direction"].lower()
             css_cls = d if d in ("bullish", "bearish", "neutral") else "neutral"
-            move_html = f'<div class="signal-move">{sig["move"]}</div>' if sig["move"] else ""
-            reason_html = f'<div class="signal-reason">{sig["reasoning"]}</div>' if sig["reasoning"] else ""
+            move_html = f'<div class="signal-move">{html.escape(sig["move"])}</div>' if sig["move"] else ""
+            reason_html = f'<div class="signal-reason">{html.escape(sig["reasoning"])}</div>' if sig["reasoning"] else ""
             cards_html += (
                 f'<div class="signal-card {css_cls}">'
-                f'<div class="signal-ticker">{sig["ticker"]}</div>'
-                f'<span class="signal-dir {css_cls}">{sig["direction"]}</span>'
+                f'<div class="signal-ticker">{html.escape(sig["ticker"])}</div>'
+                f'<span class="signal-dir {css_cls}">{html.escape(sig["direction"])}</span>'
                 f'{move_html}{reason_html}</div>'
             )
         cards_html += '</div>'
@@ -219,7 +254,7 @@ def _report_detail(report: dict):
         '<div class="metric-strip">'
         f'<div class="metric-chip">'
         f'<div class="metric-chip-label">Score</div>'
-        f'<div class="metric-chip-value">{conf}<span style="font-size:0.7rem;color:#94a3b8">/ 10</span></div></div>'
+        f'<div class="metric-chip-value">{conf}<span style="font-size:0.7rem;color:var(--on-surface-variant)">/ 10</span></div></div>'
         f'<div class="metric-chip">'
         f'<div class="metric-chip-label">Validation</div>'
         f'<div><span class="pill {pill}" style="font-size:0.7rem">{friendly_vs}</span></div></div>'
@@ -228,7 +263,7 @@ def _report_detail(report: dict):
         f'<div class="metric-chip-value">{n_articles}</div></div>'
         f'<div class="metric-chip">'
         f'<div class="metric-chip-label">Data Quality</div>'
-        f'<div class="metric-chip-value" style="font-size:0.95rem">{ds_label}</div></div>'
+        f'<div class="metric-chip-value" style="font-size:0.95rem">{html.escape(ds_label)}</div></div>'
         f'<div class="metric-chip">'
         f'<div class="metric-chip-label">Macro</div>'
         f'<div class="metric-chip-value" style="font-size:0.95rem">{macro_status}</div>'
@@ -271,19 +306,14 @@ def _report_detail(report: dict):
         icon = SECTION_ICONS.get(heading.upper(), "📄")
         with st.container(border=True):
             st.markdown(
-                f'<div class="report-section-header">{icon} {heading}</div>',
+                f'<div class="report-section-header">{icon} {html.escape(heading)}</div>',
                 unsafe_allow_html=True,
             )
 
-            # Highlighted key phrases
-            highlights = extract_highlights(content)
-            if highlights:
-                hl_html = "".join(
-                    f'<div class="section-highlight">💡 {h}</div>' for h in highlights
-                )
-                st.markdown(hl_html, unsafe_allow_html=True)
-
-            linked = linkify_sources(content, articles_for_links)
+            # Render section content: escape for safety, then restore
+            # markdown bold → <strong> and line breaks for readability.
+            safe_content = _safe_markdown_html(content)
+            linked = linkify_sources(safe_content, articles_for_links)
             st.markdown(linked, unsafe_allow_html=True)
 
             # Macro gauge visual — inject into macro section
@@ -294,7 +324,7 @@ def _report_detail(report: dict):
                 # Geopolitical news callout
                 geo_notes = extract_geopolitical_notes(analysis_text)
                 if geo_notes:
-                    geo_items = "".join(f"• {n}<br>" for n in geo_notes)
+                    geo_items = "".join(f"• {html.escape(n)}<br>" for n in geo_notes)
                     st.markdown(
                         f'<div class="geo-callout">'
                         f'<div class="geo-callout-title">🌍 Geopolitical & Event Impact</div>'
@@ -502,7 +532,7 @@ def _render_confidence_breakdown(report: dict, state: dict | None):
             f'<span style="font-size:0.88rem">{label}</span>'
             f'<span style="font-weight:600;font-size:0.88rem">{pts}/{mx}</span></div>'
             f'<div class="bar-track"><div class="bar-fill bar-amber" style="width:{pct}%"></div></div>'
-            f'<div style="font-size:0.75rem;color:#9C9C9C;margin-bottom:8px">{note}</div>',
+            f'<div style="font-size:0.75rem;color:var(--on-surface-variant);margin-bottom:8px">{note}</div>',
             unsafe_allow_html=True)
 
     st.markdown(
@@ -591,6 +621,7 @@ def _render_technicals(report: dict):
     if ta.get("summary"):
         st.caption(ta["summary"])
 
+    # ── KPI row ───────────────────────────────────────────────────
     c1, c2, c3, c4 = st.columns(4)
     with c1:
         st.metric("Price", f"${ta.get('current_price', 'N/A')}")
@@ -622,9 +653,144 @@ def _render_technicals(report: dict):
     with d4:
         st.metric("From 52W High", f"{ta.get('pct_from_52w_high', 'N/A')}%")
 
+    # ── Interactive price + indicator charts ───────────────────────
+    _render_price_chart(selected, ta)
+
     errors = [t for t in technicals if t.get("error")]
     if errors:
         st.caption(f"⚠ Data unavailable for: {', '.join(e['ticker'] for e in errors)}")
+
+
+def _render_price_chart(ticker: str, ta: dict):
+    """Render interactive Plotly charts: candlestick + volume, RSI, MACD."""
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+
+    try:
+        from data_sources.yahoo_finance import get_price_history
+        hist = get_price_history(ticker, period="6mo")
+        if hist.empty or len(hist) < 10:
+            st.caption("Insufficient price history for charts.")
+            return
+    except Exception:
+        st.caption("Could not load price history for charts.")
+        return
+
+    # ── Build 4-panel chart: Price+BB, Volume, RSI, MACD ─────────
+    fig = make_subplots(
+        rows=4, cols=1, shared_xaxes=True,
+        vertical_spacing=0.03,
+        row_heights=[0.45, 0.15, 0.2, 0.2],
+        subplot_titles=("", "", "RSI (14)", "MACD"),
+    )
+
+    dates = hist.index
+    close = hist["Close"]
+    high = hist["High"]
+    low = hist["Low"]
+    opn = hist["Open"]
+    volume = hist["Volume"]
+
+    # ── Panel 1: Candlestick + Bollinger Bands + SMA ──────────────
+    fig.add_trace(go.Candlestick(
+        x=dates, open=opn, high=high, low=low, close=close,
+        name=ticker, increasing_line_color="#22c55e",
+        decreasing_line_color="#ef4444",
+    ), row=1, col=1)
+
+    # Bollinger Bands
+    sma20 = close.rolling(20).mean()
+    std20 = close.rolling(20).std()
+    bb_upper = sma20 + 2 * std20
+    bb_lower = sma20 - 2 * std20
+
+    fig.add_trace(go.Scatter(
+        x=dates, y=bb_upper, name="BB Upper", line=dict(width=1, color="rgba(100,116,139,0.3)"),
+        showlegend=False,
+    ), row=1, col=1)
+    fig.add_trace(go.Scatter(
+        x=dates, y=bb_lower, name="BB Lower", line=dict(width=1, color="rgba(100,116,139,0.3)"),
+        fill="tonexty", fillcolor="rgba(100,116,139,0.06)", showlegend=False,
+    ), row=1, col=1)
+
+    # SMA 20 & 50
+    fig.add_trace(go.Scatter(
+        x=dates, y=sma20, name="SMA 20", line=dict(width=1.5, color="#b8860b", dash="dot"),
+    ), row=1, col=1)
+    if len(close) >= 50:
+        sma50 = close.rolling(50).mean()
+        fig.add_trace(go.Scatter(
+            x=dates, y=sma50, name="SMA 50", line=dict(width=1.5, color="#5C9CE6", dash="dot"),
+        ), row=1, col=1)
+
+    # ── Panel 2: Volume bars ──────────────────────────────────────
+    colors = ["#22c55e" if c >= o else "#ef4444" for c, o in zip(close, opn)]
+    fig.add_trace(go.Bar(
+        x=dates, y=volume, name="Volume", marker_color=colors, showlegend=False,
+    ), row=2, col=1)
+
+    # ── Panel 3: RSI ──────────────────────────────────────────────
+    delta = close.diff()
+    gain = delta.where(delta > 0, 0.0).rolling(14).mean()
+    loss = (-delta.where(delta < 0, 0.0)).rolling(14).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+
+    fig.add_trace(go.Scatter(
+        x=dates, y=rsi, name="RSI 14", line=dict(width=1.5, color="#9575CD"),
+        showlegend=False,
+    ), row=3, col=1)
+    fig.add_hline(y=70, line_dash="dash", line_color="#ef4444", line_width=1, row=3, col=1)
+    fig.add_hline(y=30, line_dash="dash", line_color="#22c55e", line_width=1, row=3, col=1)
+    fig.add_hrect(y0=30, y1=70, fillcolor="rgba(100,116,139,0.05)",
+                  line_width=0, row=3, col=1)
+
+    # ── Panel 4: MACD ─────────────────────────────────────────────
+    ema12 = close.ewm(span=12).mean()
+    ema26 = close.ewm(span=26).mean()
+    macd_line = ema12 - ema26
+    signal_line = macd_line.ewm(span=9).mean()
+    macd_hist = macd_line - signal_line
+
+    hist_colors = ["#22c55e" if v >= 0 else "#ef4444" for v in macd_hist]
+    fig.add_trace(go.Bar(
+        x=dates, y=macd_hist, name="MACD Histogram",
+        marker_color=hist_colors, showlegend=False,
+    ), row=4, col=1)
+    fig.add_trace(go.Scatter(
+        x=dates, y=macd_line, name="MACD", line=dict(width=1.5, color="#b8860b"),
+        showlegend=False,
+    ), row=4, col=1)
+    fig.add_trace(go.Scatter(
+        x=dates, y=signal_line, name="Signal", line=dict(width=1.5, color="#5C9CE6"),
+        showlegend=False,
+    ), row=4, col=1)
+
+    # ── Layout ────────────────────────────────────────────────────
+    _theme = plotly_theme()
+    fig.update_layout(
+        height=680,
+        margin=dict(l=10, r=10, t=30, b=10),
+        font=dict(family="Inter, system-ui, sans-serif", size=11, color=_theme["font_color"]),
+        paper_bgcolor=_theme["paper_bgcolor"],
+        plot_bgcolor=_theme["plot_bgcolor"],
+        xaxis_rangeslider_visible=False,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1,
+                    font=dict(size=11, color=_theme["font_color"]),
+                    bgcolor="rgba(0,0,0,0)"),
+        hovermode="x unified",
+    )
+    # Style all axes
+    for i in range(1, 5):
+        fig.update_xaxes(gridcolor=_theme["gridcolor"], row=i, col=1)
+        fig.update_yaxes(gridcolor=_theme["gridcolor"], row=i, col=1)
+    fig.update_yaxes(title_text="Price ($)", row=1, col=1)
+    fig.update_yaxes(range=[0, 100], row=3, col=1)
+    # Subplot title colors
+    for ann in fig.layout.annotations:
+        ann.font = dict(color=_theme["font_color"], size=12)
+
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
 
 def _render_evidence(report: dict, state: dict | None):
@@ -664,7 +830,7 @@ def _render_evidence(report: dict, state: dict | None):
             else:
                 source_html = f'<strong>{source}</strong>'
             st.markdown(
-                f'<span style="color:#9C9C9C;font-size:0.82rem">{icon}</span> '
+                f'<span style="color:var(--on-surface-variant);font-size:0.82rem">{icon}</span> '
                 f'{source_html} — {title}',
                 unsafe_allow_html=True)
         if len(articles) > 12:
@@ -967,14 +1133,14 @@ def _detail_trace(state: dict | None):
         decision = n.get("decision", "")
         model = n.get("llm_model", "")
         dot_cls = "dot-ok" if ns == "completed" else "dot-err"
-        model_tag = f' · <span style="color:#9C9C9C">{model}</span>' if model else ""
+        model_tag = f' · <span style="color:var(--on-surface-variant)">{model}</span>' if model else ""
         dec_tag = f' → <strong>{decision}</strong>' if decision else ""
 
         st.markdown(
             f'<div class="node-row">'
             f'<div class="node-dot {dot_cls}"></div>'
             f'<span><strong>{name}</strong>{model_tag}</span>'
-            f'<span style="margin-left:auto;color:#9C9C9C">{dur:.1f}s{dec_tag}</span>'
+            f'<span style="margin-left:auto;color:var(--on-surface-variant)">{dur:.1f}s{dec_tag}</span>'
             f'</div>', unsafe_allow_html=True)
 
 
@@ -994,7 +1160,7 @@ def _detail_timing(report: dict):
         st.markdown(
             f'<div style="display:flex;justify-content:space-between;font-size:0.88rem">'
             f'<span>{name}</span>'
-            f'<span style="color:#9C9C9C">{sec:.1f}s ({pct:.0f}%)</span></div>'
+            f'<span style="color:var(--on-surface-variant)">{sec:.1f}s ({pct:.0f}%)</span></div>'
             f'<div class="bar-track">'
             f'<div class="bar-fill bar-blue" style="width:{min(pct, 100)}%"></div></div>',
             unsafe_allow_html=True)

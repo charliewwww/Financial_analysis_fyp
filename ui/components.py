@@ -10,6 +10,24 @@ import streamlit as st
 from utils.time_utils import to_hkt, to_hkt_short
 
 
+# ── Theme helpers ─────────────────────────────────────────────────
+
+def is_dark_mode() -> bool:
+    """Check if dark mode is currently enabled."""
+    return bool(st.session_state.get("dark_mode"))
+
+
+def plotly_theme() -> dict:
+    """Return consistent Plotly layout kwargs for the current theme."""
+    dark = is_dark_mode()
+    return {
+        "font_color": "#e2e8f0" if dark else "#1e293b",
+        "gridcolor": "rgba(148,163,184,0.15)" if dark else "rgba(226,232,240,0.5)",
+        "paper_bgcolor": "rgba(0,0,0,0)",
+        "plot_bgcolor": "rgba(0,0,0,0)",
+    }
+
+
 # ── Sector colour map ─────────────────────────────────────────────
 
 SECTOR_COLORS = {
@@ -37,7 +55,10 @@ def ring_svg(score: float, max_score: float = 10, size: int = 144) -> str:
     offset = circ * (1 - pct)
     # Gold gradient for ≥4, red for <4
     color = "#b8860b" if score >= 4 else "#ef4444"
-    track_color = "#f1f5f9"
+    dark = is_dark_mode()
+    track_color = "#334155" if dark else "#f1f5f9"
+    score_fill = "#e2e8f0" if dark else "#0f172a"
+    sub_fill = "#94a3b8" if dark else "#64748b"
     return (
         f'<div style="text-align:center">'
         f'<svg width="{size}" height="{size}" viewBox="0 0 144 144">'
@@ -46,10 +67,10 @@ def ring_svg(score: float, max_score: float = 10, size: int = 144) -> str:
         f' stroke-dasharray="{circ:.1f}" stroke-dashoffset="{offset:.1f}"'
         f' transform="rotate(-90 72 72)" stroke-linecap="round"/>'
         f'<text x="72" y="66" text-anchor="middle" dominant-baseline="central"'
-        f' font-size="32" font-weight="800" fill="#0f172a"'
+        f' font-size="32" font-weight="800" fill="{score_fill}"'
         f' font-family="Manrope, sans-serif">{pct_display}'
         f'<tspan font-size="14" dy="-4">%</tspan></text>'
-        f'<text x="72" y="92" text-anchor="middle" font-size="10" fill="#64748b"'
+        f'<text x="72" y="92" text-anchor="middle" font-size="10" fill="{sub_fill}"'
         f' font-family="Inter, sans-serif">{score}/{max_score:.0f}</text>'
         f'</svg></div>')
 
@@ -165,14 +186,14 @@ def report_row(report: dict, btn_key: str, open_callback):
         score_html = (
             f'<div style="text-align:right;margin-top:4px">'
             f'<span style="font-family:Manrope,sans-serif;font-weight:800;'
-            f'font-size:0.9rem;color:#0f172a">{conf}'
-            f'<span style="font-size:0.625rem;color:#cbd5e1;font-weight:700;'
+            f'font-size:0.9rem;color:var(--on-surface)">{conf}'
+            f'<span style="font-size:0.625rem;color:var(--on-surface-variant);font-weight:700;'
             f'margin-left:2px">/10</span></span>'
         )
         if friendly:
             score_html += (
                 f'<br><span style="font-size:0.5625rem;font-weight:800;'
-                f'color:#b8860b;text-transform:uppercase;letter-spacing:0.05em">'
+                f'color:var(--primary);text-transform:uppercase;letter-spacing:0.05em">'
                 f'{friendly}</span>'
             )
         score_html += '</div>'

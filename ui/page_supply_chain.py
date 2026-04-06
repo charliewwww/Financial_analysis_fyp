@@ -20,6 +20,7 @@ from config.sectors import SECTORS
 from config.supply_chain_data import SUPPLY_CHAIN_DATA, get_supply_chain
 from database.reports_db import get_reports
 from ui.components import SECTOR_COLORS
+from ui.components import is_dark_mode, plotly_theme
 from utils.time_utils import to_hkt_short
 
 
@@ -120,7 +121,7 @@ def _get_latest_report_news(sector_id: str) -> dict:
 
 def render():
     st.markdown('<h2 style="font-family:Manrope,sans-serif;font-weight:800;'
-                'letter-spacing:-0.03em;color:#0f172a">Supply Chain Intelligence</h2>',
+                'letter-spacing:-0.03em;color:var(--on-surface)">Supply Chain Intelligence</h2>',
                 unsafe_allow_html=True)
     st.caption(
         "How companies earn revenue, what they spend on, and how the supply chain flows. "
@@ -144,7 +145,7 @@ def render():
         return
 
     st.markdown(f'<h3 style="font-family:Manrope,sans-serif;font-weight:800;'
-                f'letter-spacing:-0.02em;color:#0f172a">{sector["sector_name"]}</h3>',
+                f'letter-spacing:-0.02em;color:var(--on-surface)">{sector["sector_name"]}</h3>',
                 unsafe_allow_html=True)
     st.caption(sector["description"])
 
@@ -302,7 +303,7 @@ def _render_sankey(sector: dict):
         node=dict(
             pad=25,
             thickness=28,
-            line=dict(color="#E8E4DE", width=1),
+            line=dict(color="rgba(0,0,0,0.15)" if not is_dark_mode() else "rgba(255,255,255,0.1)", width=1),
             label=node_labels,
             color=node_colors,
             customdata=node_hover,
@@ -318,12 +319,16 @@ def _render_sankey(sector: dict):
         ),
     )])
 
+    _theme = plotly_theme()
+    _dark = is_dark_mode()
+    _label_color = "#ffffff" if _dark else "#0f172a"
     fig.update_layout(
-        font=dict(size=12, family="Inter, system-ui, sans-serif", color="#1e293b"),
+        font=dict(size=13, family="Inter, system-ui, sans-serif",
+                  color=_label_color, weight=700),
         margin=dict(l=10, r=10, t=10, b=10),
         height=480,
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor=_theme["paper_bgcolor"],
+        plot_bgcolor=_theme["plot_bgcolor"],
     )
 
     st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
@@ -436,9 +441,9 @@ def _render_news_bubble(sector_id: str, sector: dict, news_data: dict):
             f'cursor:default;transition:transform 0.2s" '
             f'title="{b["name"]}\n{mention_label}\n{b["sentiment"] or "No prediction"}">'
             f'<span style="font-weight:800;font-size:{ticker_size}rem;'
-            f'font-family:Manrope,sans-serif;color:#1e293b;line-height:1">'
+            f'font-family:Manrope,sans-serif;color:var(--on-surface);line-height:1">'
             f'{b["ticker"]}</span>'
-            f'<span style="font-size:{font_size * 0.6}rem;color:#64748b;margin-top:2px">'
+            f'<span style="font-size:{font_size * 0.6}rem;color:var(--on-surface-variant);margin-top:2px">'
             f'{icon} {mention_label}</span>'
             f'</div>'
         )
@@ -448,16 +453,16 @@ def _render_news_bubble(sector_id: str, sector: dict, news_data: dict):
     # Legend
     st.markdown(
         '<div style="display:flex;gap:16px;justify-content:center;margin-top:4px">'
-        '<span style="display:inline-flex;align-items:center;gap:4px;font-size:0.72rem;color:#64748b">'
+        '<span style="display:inline-flex;align-items:center;gap:4px;font-size:0.72rem;color:var(--on-surface-variant)">'
         '<span style="width:10px;height:10px;border-radius:50%;border:2px solid #22c55e;background:rgba(34,197,94,0.15)"></span>'
         'Bullish</span>'
-        '<span style="display:inline-flex;align-items:center;gap:4px;font-size:0.72rem;color:#64748b">'
+        '<span style="display:inline-flex;align-items:center;gap:4px;font-size:0.72rem;color:var(--on-surface-variant)">'
         '<span style="width:10px;height:10px;border-radius:50%;border:2px solid #ef4444;background:rgba(239,68,68,0.15)"></span>'
         'Bearish</span>'
-        '<span style="display:inline-flex;align-items:center;gap:4px;font-size:0.72rem;color:#64748b">'
+        '<span style="display:inline-flex;align-items:center;gap:4px;font-size:0.72rem;color:var(--on-surface-variant)">'
         '<span style="width:10px;height:10px;border-radius:50%;border:2px solid #94a3b8;background:rgba(100,116,139,0.1)"></span>'
         'Neutral</span>'
-        '<span style="display:inline-flex;align-items:center;gap:4px;font-size:0.72rem;color:#64748b">'
+        '<span style="display:inline-flex;align-items:center;gap:4px;font-size:0.72rem;color:var(--on-surface-variant)">'
         '<span style="width:10px;height:10px;border-radius:50%;border:2px solid #cbd5e1;background:rgba(100,116,139,0.08)"></span>'
         'No prediction</span>'
         '</div>',
@@ -470,10 +475,10 @@ def _render_bubble_placeholder(bubble_data: list[dict]):
     for b in bubble_data:
         html += (
             f'<div style="width:72px;height:72px;border-radius:50%;'
-            f'background:rgba(100,116,139,0.06);border:2px solid #e2e8f0;'
+            f'background:rgba(100,116,139,0.06);border:2px solid var(--outline-variant);'
             f'display:flex;flex-direction:column;align-items:center;justify-content:center">'
             f'<span style="font-weight:800;font-size:0.9rem;font-family:Manrope,sans-serif;'
-            f'color:#94a3b8">{b["ticker"]}</span>'
+            f'color:var(--on-surface-variant)">{b["ticker"]}</span>'
             f'</div>'
         )
     html += '</div>'
@@ -524,18 +529,20 @@ def _render_revenue_chart(company: dict, ticker: str):
         customdata=descs_r,
     ))
 
+    _theme = plotly_theme()
     fig.update_layout(
         xaxis=dict(
             title="% of Total Revenue",
             range=[0, max(pcts) + 10],
             showgrid=True,
-            gridcolor="rgba(0,0,0,0.05)",
+            gridcolor=_theme["gridcolor"],
         ),
         yaxis=dict(title="", tickfont=dict(size=11)),
         margin=dict(l=10, r=20, t=10, b=40),
         height=max(250, len(names) * 48 + 60),
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor=_theme["paper_bgcolor"],
+        plot_bgcolor=_theme["plot_bgcolor"],
+        font_color=_theme["font_color"],
         bargap=0.25,
     )
 
@@ -549,8 +556,8 @@ def _render_revenue_chart(company: dict, ticker: str):
             f'<span style="width:8px;height:8px;border-radius:50%;background:{color};'
             f'margin-top:6px;flex-shrink:0"></span>'
             f'<div><span style="font-weight:600;font-size:0.85rem">{name}</span> '
-            f'<span style="color:#9C9C9C;font-size:0.8rem">({pct}%)</span><br>'
-            f'<span style="font-size:0.78rem;color:#666">{desc}</span></div></div>',
+            f'<span style="color:var(--on-surface-variant);font-size:0.8rem">({pct}%)</span><br>'
+            f'<span style="font-size:0.78rem;color:var(--on-surface-variant)">{desc}</span></div></div>',
             unsafe_allow_html=True,
         )
 
@@ -598,18 +605,20 @@ def _render_cost_chart(company: dict, ticker: str):
         customdata=sources_r,
     ))
 
+    _theme = plotly_theme()
     fig.update_layout(
         xaxis=dict(
             title="% of Total Costs",
             range=[0, max(pcts) + 10],
             showgrid=True,
-            gridcolor="rgba(0,0,0,0.05)",
+            gridcolor=_theme["gridcolor"],
         ),
         yaxis=dict(title="", tickfont=dict(size=11)),
         margin=dict(l=10, r=20, t=10, b=40),
         height=max(250, len(names) * 48 + 60),
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor=_theme["paper_bgcolor"],
+        plot_bgcolor=_theme["plot_bgcolor"],
+        font_color=_theme["font_color"],
         bargap=0.25,
     )
 
@@ -623,8 +632,8 @@ def _render_cost_chart(company: dict, ticker: str):
             f'<span style="width:8px;height:8px;border-radius:50%;background:{color};'
             f'margin-top:6px;flex-shrink:0"></span>'
             f'<div><span style="font-weight:600;font-size:0.85rem">{name}</span> '
-            f'<span style="color:#9C9C9C;font-size:0.8rem">({pct}%)</span><br>'
-            f'<span style="font-size:0.78rem;color:#666">Source: {source}</span></div></div>',
+            f'<span style="color:var(--on-surface-variant);font-size:0.8rem">({pct}%)</span><br>'
+            f'<span style="font-size:0.78rem;color:var(--on-surface-variant)">Source: {source}</span></div></div>',
             unsafe_allow_html=True,
         )
 
@@ -720,18 +729,20 @@ def _render_sector_comparison(sector: dict):
         customdata=segment_names,
     ))
 
+    _theme = plotly_theme()
     fig.update_layout(
         yaxis=dict(
             title="% of Revenue",
             range=[0, 110],
             showgrid=True,
-            gridcolor="rgba(0,0,0,0.05)",
+            gridcolor=_theme["gridcolor"],
         ),
         xaxis=dict(title="", tickfont=dict(size=12, weight=700)),
         margin=dict(l=40, r=20, t=10, b=40),
         height=350,
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor=_theme["paper_bgcolor"],
+        plot_bgcolor=_theme["plot_bgcolor"],
+        font_color=_theme["font_color"],
         bargap=0.35,
     )
 

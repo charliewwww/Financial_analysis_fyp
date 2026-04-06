@@ -11,7 +11,7 @@ GLOBAL_CSS = """
 /* ── Google Fonts ─────────────────────────────────── */
 @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap');
 
-/* ── Design Tokens ────────────────────────────────── */
+/* ── Design Tokens (Light) ────────────────────────── */
 :root {
     --primary: #b8860b;
     --primary-light: #d4af37;
@@ -20,6 +20,7 @@ GLOBAL_CSS = """
     --on-surface-variant: #64748b;
     --surface: #f8fafc;
     --surface-card: rgba(255, 255, 255, 0.8);
+    --surface-elevated: #ffffff;
     --outline-variant: #e2e8f0;
     --error: #ef4444;
     --sector-ai: #5C9CE6;
@@ -28,6 +29,32 @@ GLOBAL_CSS = """
     --shadow-premium: 0 20px 50px rgba(0, 0, 0, 0.05);
     --shadow-glass: 0 8px 32px 0 rgba(31, 38, 135, 0.04);
     --radius-card: 1.5rem;
+    --bar-track-bg: #f1f5f9;
+    --sidebar-bg: #FFFFFF;
+    --sidebar-shadow: 2px 0 20px rgba(0,0,0,0.03);
+    --code-bg: #f1f5f9;
+    --hover-bg: rgba(0,0,0,0.02);
+}
+
+/* ── Dark Mode Tokens ─────────────────────────────── */
+[data-theme="dark"] {
+    --primary: #d4af37;
+    --primary-light: #e8c84a;
+    --primary-container: #3d2e06;
+    --on-surface: #e2e8f0;
+    --on-surface-variant: #94a3b8;
+    --surface: #0f172a;
+    --surface-card: rgba(30, 41, 59, 0.8);
+    --surface-elevated: #1e293b;
+    --outline-variant: #334155;
+    --error: #f87171;
+    --shadow-premium: 0 20px 50px rgba(0, 0, 0, 0.3);
+    --shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
+    --bar-track-bg: #1e293b;
+    --sidebar-bg: #1e293b;
+    --sidebar-shadow: 2px 0 20px rgba(0,0,0,0.2);
+    --code-bg: #1e293b;
+    --hover-bg: rgba(255,255,255,0.04);
 }
 
 /* ── Page ─────────────────────────────────────────── */
@@ -49,11 +76,11 @@ GLOBAL_CSS = """
     letter-spacing: -0.02em;
 }
 
-/* ── Sidebar — clean white, no hard border ────────── */
+/* ── Sidebar — clean, no hard border ──────────────── */
 section[data-testid="stSidebar"] {
-    background: #FFFFFF !important;
+    background: var(--sidebar-bg) !important;
     border-right: none !important;
-    box-shadow: 2px 0 20px rgba(0,0,0,0.03);
+    box-shadow: var(--sidebar-shadow);
     font-family: 'Manrope', sans-serif;
 }
 section[data-testid="stSidebar"] [data-testid="stMarkdown"] {
@@ -69,13 +96,13 @@ section[data-testid="stSidebar"] .stRadio > label {
     background: var(--surface-card) !important;
     backdrop-filter: blur(12px) !important;
     -webkit-backdrop-filter: blur(12px) !important;
-    border: 1px solid rgba(255, 255, 255, 0.4) !important;
+    border: 1px solid var(--outline-variant) !important;
     border-radius: var(--radius-card) !important;
     box-shadow: var(--shadow-premium);
     transition: all 0.5s ease;
 }
 [data-testid="stVerticalBlockBorderWrapper"]:hover {
-    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.07);
+    box-shadow: var(--shadow-premium);
 }
 
 /* ── Metrics — Manrope numerals ───────────────────── */
@@ -119,7 +146,7 @@ button[data-testid="stBaseButton-secondary"],
 button[data-testid="stBaseButton-minimal"] {
     border: 1px solid var(--outline-variant) !important;
     border-radius: 1rem !important;
-    background: #FFFFFF !important;
+    background: var(--surface-elevated) !important;
     color: var(--on-surface) !important;
     font-family: 'Inter', sans-serif !important;
     white-space: nowrap !important; min-width: fit-content !important;
@@ -136,7 +163,7 @@ button[data-testid="stBaseButton-minimal"]:hover {
 [data-testid="stExpander"] {
     background: var(--surface-card);
     backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.4) !important;
+    border: 1px solid var(--outline-variant) !important;
     border-radius: 1rem; overflow: hidden;
 }
 
@@ -156,12 +183,12 @@ hr { border-color: var(--outline-variant) !important; }
 .pill-green  { background: #dcfce7; color: #166534; }
 .pill-amber  { background: var(--primary-container); color: #78350f; }
 .pill-red    { background: #fee2e2; color: #991b1b; }
-.pill-gray   { background: #f1f5f9; color: var(--on-surface-variant); }
+.pill-gray   { background: var(--bar-track-bg); color: var(--on-surface-variant); }
 
 /* ── Progress Bars — thin, gradient, full-round ───── */
 .bar-track {
     height: 6px; border-radius: 9999px;
-    background: #f1f5f9; overflow: hidden; margin: 6px 0;
+    background: var(--bar-track-bg); overflow: hidden; margin: 6px 0;
 }
 .bar-fill { height: 100%; border-radius: 9999px; }
 .bar-amber  { background: linear-gradient(90deg, var(--primary-light), var(--primary)); }
@@ -173,22 +200,22 @@ hr { border-color: var(--outline-variant) !important; }
 
 /* ── Glass Card (for HTML injection) ──────────────── */
 .glass-card {
-    background: rgba(255, 255, 255, 0.8);
+    background: var(--surface-card);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.4);
+    border: 1px solid var(--outline-variant);
     border-radius: 1.5rem;
-    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.05);
+    box-shadow: var(--shadow-premium);
     padding: 2rem;
 }
 
 /* ── KPI Card ─────────────────────────────────────── */
 .kpi-card {
-    background: rgba(255, 255, 255, 0.8);
+    background: var(--surface-card);
     backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.4);
+    border: 1px solid var(--outline-variant);
     border-radius: 1.5rem; padding: 1.75rem 2rem;
-    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.05);
+    box-shadow: var(--shadow-premium);
     transition: all 0.5s ease;
     border-bottom: 4px solid transparent;
 }
@@ -208,7 +235,7 @@ hr { border-color: var(--outline-variant) !important; }
     letter-spacing: -0.03em; line-height: 1.1;
 }
 .kpi-sub {
-    font-size: 0.75rem; font-weight: 700; color: #cbd5e1;
+    font-size: 0.75rem; font-weight: 700; color: var(--on-surface-variant);
 }
 
 /* ── Intelligence Feed Row ────────────────────────── */
@@ -219,7 +246,7 @@ hr { border-color: var(--outline-variant) !important; }
     border: 1px solid transparent; cursor: default;
 }
 .feed-row:hover {
-    background: var(--surface); border-color: #f1f5f9;
+    background: var(--hover-bg); border-color: var(--outline-variant);
 }
 
 /* ── Sector Dot Container ─────────────────────────── */
@@ -241,19 +268,20 @@ hr { border-color: var(--outline-variant) !important; }
 /* ── Chain / Supply Chain ─────────────────────────── */
 .chain-row {
     display: flex; align-items: center; padding: 7px 0;
-    border-bottom: 1px solid #f1f5f9; gap: 10px; font-size: 0.85rem;
+    border-bottom: 1px solid var(--outline-variant); gap: 10px; font-size: 0.85rem;
 }
 .chain-ticker { font-weight: 700; min-width: 60px; }
 .chain-role   { color: var(--on-surface-variant); min-width: 160px; font-size: 0.8rem; }
 .chain-target {
-    display: inline-block; background: #f1f5f9; padding: 2px 10px;
+    display: inline-block; background: var(--bar-track-bg); padding: 2px 10px;
     border-radius: 6px; font-size: 0.78rem; margin: 2px;
+    color: var(--on-surface);
 }
 
 /* ── Node execution trace ─────────────────────────── */
 .node-row {
     display: flex; align-items: center; padding: 9px 0;
-    border-bottom: 1px solid #f1f5f9; gap: 10px;
+    border-bottom: 1px solid var(--outline-variant); gap: 10px;
 }
 .node-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
 .dot-ok  { background: #22c55e; }
@@ -276,10 +304,10 @@ hr { border-color: var(--outline-variant) !important; }
 
 /* ── CTA Section ──────────────────────────────────── */
 .cta-section {
-    background: rgba(255,255,255,0.4);
+    background: var(--surface-card);
     backdrop-filter: blur(12px); border-radius: 2rem;
-    padding: 2.5rem; border: 1px solid rgba(255,255,255,0.6);
-    box-shadow: 0 20px 50px rgba(0,0,0,0.05);
+    padding: 2.5rem; border: 1px solid var(--outline-variant);
+    box-shadow: var(--shadow-premium);
 }
 
 /* ── Section Headers ──────────────────────────────── */
@@ -303,7 +331,7 @@ hr { border-color: var(--outline-variant) !important; }
 
 /* ── System Health Panel ──────────────────────────── */
 .health-panel {
-    background: rgba(248,250,252,0.5); border-radius: 1rem;
+    background: var(--hover-bg); border-radius: 1rem;
     padding: 1.25rem;
 }
 .health-title {
@@ -328,7 +356,7 @@ hr { border-color: var(--outline-variant) !important; }
 .sc-footer {
     display: flex; flex-wrap: wrap; justify-content: space-between;
     align-items: center; padding: 1.5rem 0;
-    border-top: 1px solid #f1f5f9; margin-top: 2rem;
+    border-top: 1px solid var(--outline-variant); margin-top: 2rem;
 }
 .sc-footer span {
     font-size: 0.5625rem; font-weight: 800;
@@ -371,17 +399,17 @@ hr { border-color: var(--outline-variant) !important; }
 }
 .metric-chip {
     flex: 1 1 120px; text-align: center; padding: 10px 12px;
-    border-radius: 12px; border: 1px solid #f1f5f9;
-    background: #fafafa; font-family: Manrope, sans-serif;
+    border-radius: 12px; border: 1px solid var(--outline-variant);
+    background: var(--surface-card); font-family: Manrope, sans-serif;
 }
 .metric-chip-label {
     font-size: 0.55rem; font-weight: 700; text-transform: uppercase;
-    letter-spacing: 0.08em; color: #94a3b8; margin-bottom: 2px;
+    letter-spacing: 0.08em; color: var(--on-surface-variant); margin-bottom: 2px;
 }
 .metric-chip-value {
-    font-size: 1.2rem; font-weight: 800; color: #0f172a;
+    font-size: 1.2rem; font-weight: 800; color: var(--on-surface);
 }
-.metric-chip-sub { font-size: 0.68rem; color: #94a3b8; }
+.metric-chip-sub { font-size: 0.68rem; color: var(--on-surface-variant); }
 
 /* ── Signal cards ───────────────────────────────────────────────── */
 .signal-grid { display: flex; flex-wrap: wrap; gap: 12px; margin: 8px 0 16px; }
@@ -396,7 +424,7 @@ hr { border-color: var(--outline-variant) !important; }
 .signal-card.neutral { background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); border-color: #e2e8f0; }
 .signal-ticker {
     font-size: 1.15rem; font-weight: 800; letter-spacing: -0.02em;
-    color: #0f172a; margin-bottom: 2px;
+    color: var(--on-surface); margin-bottom: 2px;
 }
 .signal-dir {
     font-size: 0.7rem; font-weight: 800; letter-spacing: 0.08em;
@@ -406,15 +434,15 @@ hr { border-color: var(--outline-variant) !important; }
 .signal-dir.bullish { background: #22c55e; color: #fff; }
 .signal-dir.bearish { background: #ef4444; color: #fff; }
 .signal-dir.neutral { background: #94a3b8; color: #fff; }
-.signal-move { font-size: 0.82rem; color: #475569; margin-bottom: 4px; }
-.signal-reason { font-size: 0.75rem; color: #64748b; line-height: 1.4; }
+.signal-move { font-size: 0.82rem; color: var(--on-surface-variant); margin-bottom: 4px; }
+.signal-reason { font-size: 0.75rem; color: var(--on-surface-variant); line-height: 1.4; }
 
 /* ── Section header with icon ───────────────────────────────────── */
 .report-section-header {
     font-family: Manrope, sans-serif; font-weight: 800;
-    font-size: 1.1rem; color: #0f172a;
+    font-size: 1.1rem; color: var(--on-surface);
     letter-spacing: -0.02em; margin: 0 0 10px;
-    padding-bottom: 8px; border-bottom: 2px solid #f1f5f9;
+    padding-bottom: 8px; border-bottom: 2px solid var(--outline-variant);
 }
 
 /* ── Thesis banner ──────────────────────────────────────────────── */
@@ -434,11 +462,11 @@ hr { border-color: var(--outline-variant) !important; }
 
 /* ── Section highlight callout ──────────────────────────────────── */
 .section-highlight {
-    background: linear-gradient(90deg, #fffbeb 0%, #fef3c7 100%);
+    background: var(--primary-container);
     border-left: 4px solid #C8A951; border-radius: 0 10px 10px 0;
     padding: 10px 16px; margin: 10px 0 12px;
     font-family: Manrope, sans-serif; font-size: 0.88rem;
-    font-weight: 700; color: #1e293b; line-height: 1.45;
+    font-weight: 700; color: var(--on-surface); line-height: 1.45;
 }
 
 /* ── Macro gauge row ────────────────────────────────────────────── */
@@ -447,16 +475,16 @@ hr { border-color: var(--outline-variant) !important; }
 }
 .macro-gauge {
     flex: 1 1 140px; text-align: center; padding: 12px 10px;
-    border-radius: 12px; background: #f8fafc; border: 1px solid #f1f5f9;
+    border-radius: 12px; background: var(--surface); border: 1px solid var(--outline-variant);
     font-family: Manrope, sans-serif;
 }
 .macro-gauge-arrow { font-size: 1.5rem; margin-bottom: 2px; }
 .macro-gauge-name {
     font-size: 0.65rem; font-weight: 700; text-transform: uppercase;
-    letter-spacing: 0.05em; color: #64748b; margin-bottom: 2px;
+    letter-spacing: 0.05em; color: var(--on-surface-variant); margin-bottom: 2px;
 }
 .macro-gauge-val {
-    font-size: 1rem; font-weight: 800; color: #0f172a;
+    font-size: 1rem; font-weight: 800; color: var(--on-surface);
 }
 .macro-gauge-delta { font-size: 0.7rem; }
 
@@ -473,4 +501,89 @@ hr { border-color: var(--outline-variant) !important; }
     font-size: 0.78rem; text-transform: uppercase;
     letter-spacing: 0.06em; color: #0369a1; margin-bottom: 6px;
 }
+</style>"""
+
+
+# ── Dark mode override (injected conditionally) ──────────────────
+DARK_MODE_CSS = """
+<style>
+:root {
+    --primary: #d4af37 !important;
+    --primary-light: #e8c84a !important;
+    --primary-container: #3d2e06 !important;
+    --on-surface: #e2e8f0 !important;
+    --on-surface-variant: #94a3b8 !important;
+    --surface: #0f172a !important;
+    --surface-card: rgba(30, 41, 59, 0.8) !important;
+    --surface-elevated: #1e293b !important;
+    --outline-variant: #334155 !important;
+    --error: #f87171 !important;
+    --shadow-premium: 0 20px 50px rgba(0, 0, 0, 0.3) !important;
+    --shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.2) !important;
+    --bar-track-bg: #1e293b !important;
+    --sidebar-bg: #1e293b !important;
+    --sidebar-shadow: 2px 0 20px rgba(0,0,0,0.2) !important;
+    --code-bg: #1e293b !important;
+    --hover-bg: rgba(255,255,255,0.04) !important;
+}
+/* Dark mode overrides for Streamlit internals */
+.stApp { background-color: #0f172a !important; }
+section[data-testid="stSidebar"] { background: #1e293b !important; }
+[data-testid="stSidebar"] [data-testid="stMarkdown"] p,
+[data-testid="stSidebar"] [data-testid="stMarkdown"] span,
+[data-testid="stSidebar"] label { color: #e2e8f0 !important; }
+.stRadio label span { color: #e2e8f0 !important; }
+[data-testid="stVerticalBlockBorderWrapper"] {
+    background: rgba(30,41,59,0.8) !important;
+    border-color: #334155 !important;
+}
+[data-testid="stExpander"] {
+    background: rgba(30,41,59,0.8) !important;
+    border-color: #334155 !important;
+}
+[data-testid="stExpander"] summary span { color: #e2e8f0 !important; }
+.stSelectbox label, .stMultiSelect label,
+.stTextInput label, .stNumberInput label { color: #e2e8f0 !important; }
+p, li, span { color: #e2e8f0; }
+.stCaption, [data-testid="stCaptionContainer"] p { color: #94a3b8 !important; }
+hr { border-color: #334155 !important; }
+/* Signal cards in dark mode */
+.signal-card.bullish { background: linear-gradient(135deg, #064e3b 0%, #065f46 100%) !important; border-color: #047857 !important; }
+.signal-card.bearish { background: linear-gradient(135deg, #450a0a 0%, #7f1d1d 100%) !important; border-color: #991b1b !important; }
+.signal-card.neutral { background: linear-gradient(135deg, #1e293b 0%, #334155 100%) !important; border-color: #475569 !important; }
+/* Thesis banner stays dark in both modes */
+/* Pill adjustments */
+.pill-green  { background: #065f46 !important; color: #6ee7b7 !important; }
+.pill-amber  { background: #3d2e06 !important; color: #fcd34d !important; }
+.pill-red    { background: #7f1d1d !important; color: #fca5a5 !important; }
+.pill-gray   { background: #334155 !important; color: #94a3b8 !important; }
+/* Sector dot box backgrounds */
+.sector-dot-box.ai     { background: #1e3a5f !important; }
+.sector-dot-box.space  { background: #2d2250 !important; }
+.sector-dot-box.optical { background: #3d2e06 !important; }
+/* Geo callout */
+.geo-callout { background: linear-gradient(135deg, #0c1929 0%, #0f2744 100%) !important; border-color: #1e3a5f !important; color: #93c5fd !important; }
+.geo-callout-title { color: #60a5fa !important; }
+/* Section highlight */
+.section-highlight { background: #3d2e06 !important; color: #fcd34d !important; }
+/* Streamlit selectbox / multiselect / toggle */
+[data-testid="stSelectbox"] div[data-baseweb] { background: #1e293b !important; color: #e2e8f0 !important; }
+[data-testid="stMultiSelect"] div[data-baseweb] { background: #1e293b !important; color: #e2e8f0 !important; }
+/* Input fields */
+input, textarea { background-color: #1e293b !important; color: #e2e8f0 !important; }
+/* Plotly charts — override the white modebar backgrounds */
+.js-plotly-plot .plotly .modebar { background: transparent !important; }
+.js-plotly-plot .plotly .modebar-btn path { fill: #94a3b8 !important; }
+/* Alert boxes */
+[data-testid="stAlert"] { background-color: rgba(30,41,59,0.8) !important; border-color: #334155 !important; }
+[data-testid="stAlert"] p { color: #e2e8f0 !important; }
+/* Streamlit subheader / markdown bold */
+.stApp strong, .stApp b { color: #e2e8f0; }
+/* Prediction card dark mode backgrounds */
+div[style*="rgba(34,197,94,0.08)"] { background: rgba(34,197,94,0.15) !important; }
+div[style*="rgba(239,68,68,0.08)"] { background: rgba(239,68,68,0.15) !important; }
+div[style*="rgba(100,116,139,0.08)"] { background: rgba(100,116,139,0.12) !important; }
+div[style*="rgba(100,116,139,0.05)"] { background: rgba(100,116,139,0.1) !important; }
+/* Streamlit divider */
+[data-testid="stHorizontalRule"] { border-color: #334155 !important; }
 </style>"""

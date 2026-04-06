@@ -7,6 +7,7 @@ st.session_state tracks log lines, results, and completion status.
 """
 
 import streamlit as st
+import html
 import threading
 import time as _time
 
@@ -16,6 +17,7 @@ from config.sectors import SECTORS
 # NOTE: workflow / LLM imports are LAZY (inside _analysis_worker)
 # to avoid loading langgraph + chromadb + yfinance on every page render.
 from database.reports_db import get_reports_list, get_prediction_accuracy, get_report_count
+from data_sources.yahoo_finance import get_sector_prices
 from ui.components import SECTOR_COLORS, SECTOR_DOT_CLASS, ring_svg, report_row
 from utils.time_utils import to_hkt_short
 
@@ -37,6 +39,19 @@ def _cached_report_count():
     return get_report_count()
 
 
+@st.cache_data(ttl=300)
+def _cached_sector_prices():
+    """Fetch current prices for all sector tickers (cached 5 min)."""
+    all_tickers = []
+    ticker_sector = {}
+    for sid, sec in SECTORS.items():
+        for t in sec["tickers"]:
+            all_tickers.append(t)
+            ticker_sector[t] = sid
+    snapshots = get_sector_prices(all_tickers)
+    return snapshots, ticker_sector
+
+
 def _open_report(report_id: int):
     st.session_state.page = "Reports"
     st.session_state.selected_report_id = report_id
@@ -49,7 +64,7 @@ def _open_report(report_id: int):
 def render():
     # Invisible heading for structure — page title is in the top bar area
     st.markdown('<h2 style="font-family:Manrope,sans-serif;font-weight:800;'
-                'letter-spacing:-0.03em;color:#0f172a;margin-bottom:0.5rem">'
+                'letter-spacing:-0.03em;color:var(--on-surface);margin-bottom:0.5rem">'
                 'Command Centre</h2>', unsafe_allow_html=True)
     st.caption("Live intelligence feed and multi-agent analysis dashboard")
 
@@ -63,9 +78,9 @@ def render():
             'rgba(212,175,55,0.04) 100%);border:1px solid rgba(184,134,11,0.15);'
             'border-radius:1.5rem;padding:2rem 2.5rem;margin-bottom:1.5rem">'
             '<h3 style="font-family:Manrope,sans-serif;font-weight:800;'
-            'letter-spacing:-0.02em;margin:0 0 0.5rem 0;color:#0f172a">'
+            'letter-spacing:-0.02em;margin:0 0 0.5rem 0;color:var(--on-surface)">'
             'Welcome to Supply Chain Alpha</h3>'
-            '<p style="color:#64748b;font-size:0.9rem;line-height:1.7;margin:0">'
+            '<p style="color:var(--on-surface-variant);font-size:0.9rem;line-height:1.7;margin:0">'
             'Your AI-powered finance intelligence platform. It analyses stocks across '
             '<strong>3 sectors</strong> using multi-agent reasoning — pulling live news, '
             'SEC filings, technical indicators, and macroeconomic data — then validates '
@@ -117,6 +132,39 @@ def render():
 
     st.write("")
 
+    # ── Sector Snapshot — live price ticker strip ─────────────────
+    try:
+        snapshots, ticker_sector = _cached_sector_prices()
+        valid = [s for s in snapshots if not s.get("error") and s.get("price")]
+        if valid:
+            chips_html = '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:1rem">'
+            for s in valid:
+                sid = ticker_sector.get(s["ticker"], "")
+                dot_cls = SECTOR_DOT_CLASS.get(sid, "optical")
+                chg = s.get("change_1w_pct")
+                if chg is not None:
+                    chg_color = "#22c55e" if chg >= 0 else "#ef4444"
+                    chg_str = f'<span style="color:{chg_color};font-weight:700;font-size:0.72rem">' \
+                              f'{"+" if chg >= 0 else ""}{chg:.1f}%</span>'
+                else:
+                    chg_str = ""
+                chips_html += (
+                    f'<div style="display:flex;align-items:center;gap:8px;'
+                    f'background:var(--surface-card);border:1px solid var(--outline-variant);'
+                    f'border-radius:12px;padding:8px 14px;font-family:Manrope,sans-serif">'
+                    f'<span class="sector-dot {dot_cls}" style="width:6px;height:6px"></span>'
+                    f'<span style="font-weight:800;font-size:0.8rem;color:var(--on-surface);'
+                    f'letter-spacing:-0.01em">{html.escape(s["ticker"])}</span>'
+                    f'<span style="font-weight:700;font-size:0.8rem;color:var(--on-surface)">'
+                    f'${s["price"]:.2f}</span>'
+                    f'{chg_str}'
+                    f'</div>'
+                )
+            chips_html += '</div>'
+            st.markdown(chips_html, unsafe_allow_html=True)
+    except Exception:
+        pass  # graceful degradation — network issues shouldn't break dashboard
+
     # ── Two-column body ───────────────────────────────────────────
     col_left, col_right = st.columns([7, 5])
 
@@ -156,12 +204,42 @@ def render():
                 st.write("")
                 if avg_conf >= 7:
                     st.markdown('<span style="display:inline-block;padding:4px 12px;'
-                                'background:rgba(184,134,11,0.1);color:#b8860b;'
+                                'background:rgba(184,134,11,0.1);color:var(--primary);'
                                 'font-size:0.625rem;font-weight:800;border-radius:9999px;'
                                 'text-transform:uppercase;letter-spacing:0.1em">'
                                 'Optimal Range</span>', unsafe_allow_html=True)
                 st.caption(f"Systemic confidence is weighted based on "
                            f"**{len(all_rpts)} reports** across all sectors.")
+
+            # ── Confidence Trend (mini chart) ─────────────────
+            if len(all_rpts) >= 2:
+                import plotly.graph_objects as go
+                trend_data = sorted(
+                    [r for r in all_rpts if r.get("confidence_score")],
+                    key=lambda r: r["id"],
+                )[-20:]  # last 20 reports
+                if len(trend_data) >= 2:
+                    x_vals = list(range(1, len(trend_data) + 1))
+                    y_vals = [r["confidence_score"] for r in trend_data]
+                    fig = go.Figure()
+                    fig.add_trace(go.Scatter(
+                        x=x_vals, y=y_vals, mode="lines+markers",
+                        line=dict(color="#b8860b", width=2),
+                        marker=dict(size=5, color="#d4af37"),
+                        hovertemplate="Report %{x}<br>Confidence: %{y:.1f}<extra></extra>",
+                    ))
+                    fig.update_layout(
+                        height=120, margin=dict(l=0, r=0, t=5, b=20),
+                        paper_bgcolor="rgba(0,0,0,0)",
+                        plot_bgcolor="rgba(0,0,0,0)",
+                        xaxis=dict(showgrid=False, showticklabels=False, zeroline=False),
+                        yaxis=dict(range=[0, 10.5], showgrid=True,
+                                   gridcolor="rgba(0,0,0,0.05)", showticklabels=True,
+                                   tickfont=dict(size=9, color="#94a3b8"),
+                                   zeroline=False),
+                        showlegend=False,
+                    )
+                    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
         st.write("")
 
@@ -188,9 +266,9 @@ def render():
                     f'align-items:center;margin-bottom:0.35rem">'
                     f'<span style="font-size:0.75rem;font-weight:700;'
                     f'text-transform:uppercase;letter-spacing:0.05em;'
-                    f'color:#64748b">{sec["name"]}</span>'
+                    f'color:var(--on-surface-variant)">{sec["name"]}</span>'
                     f'<span style="font-size:0.75rem;font-weight:700;'
-                    f'color:#0f172a">{right_lbl}</span>'
+                    f'color:var(--on-surface)">{right_lbl}</span>'
                     f'</div>'
                     f'<div class="bar-track">'
                     f'<div class="bar-fill {bar_cls}" style="width:{pct}%"></div>'
@@ -209,7 +287,7 @@ def render():
     with cta_left:
         st.markdown('<span class="section-title-lg">Automated Reasoning Engine</span>',
                     unsafe_allow_html=True)
-        st.markdown('<p style="color:#64748b;font-size:0.9rem;line-height:1.7;'
+        st.markdown('<p style="color:var(--on-surface-variant);font-size:0.9rem;line-height:1.7;'
                     'margin-top:0.5rem">'
                     'Scale your research by deploying multi-agent swarms. The engine '
                     'synchronizes SEC filings with real-world logistical data for '
@@ -462,9 +540,9 @@ def _render_live_pipeline_graph(job: dict):
             shadow = "none"
             anim = ""
         else:
-            bg = "#f1f5f9"
-            color = "#94a3b8"
-            border = "1px solid #e2e8f0"
+            bg = "var(--bar-track-bg)"
+            color = "var(--on-surface-variant)"
+            border = "1px solid var(--outline-variant)"
             shadow = "none"
             anim = ""
 
@@ -479,7 +557,7 @@ def _render_live_pipeline_graph(job: dict):
         )
         # Arrow between nodes
         if i < len(_PIPELINE_NODES) - 1:
-            arrow_color = "#22c55e" if node_id in completed else "#cbd5e1"
+            arrow_color = "#22c55e" if node_id in completed else "var(--on-surface-variant)"
             nodes_html += (
                 f'<div style="display:flex;align-items:center;color:{arrow_color};'
                 f'font-size:0.9rem;font-weight:700;margin:0 2px">→</div>'
@@ -492,8 +570,8 @@ def _render_live_pipeline_graph(job: dict):
         '}</style>'
         '<div style="display:flex;align-items:center;justify-content:center;'
         'gap:0;padding:0.8rem 0.5rem;margin-bottom:0.75rem;'
-        'background:rgba(255,255,255,0.7);border-radius:1rem;'
-        'border:1px solid #e2e8f0;overflow-x:auto">'
+        'background:var(--surface-card);border-radius:1rem;'
+        'border:1px solid var(--outline-variant);overflow-x:auto">'
         f'{nodes_html}'
         '</div>'
     )
@@ -614,7 +692,7 @@ def _result_card(res: dict):
             st.markdown(f'<span class="pill {pill_cls(vs)}">{friendly}</span>',
                         unsafe_allow_html=True)
     with c4:
-        st.markdown(f'<span style="color:{ds_color}">● {ds.title() if ds else ""}</span>',
+        st.markdown(f'<span style="color:{ds_color}">● {html.escape(ds.title()) if ds else ""}</span>',
                     unsafe_allow_html=True)
 
     ns = res.get("news_summary", "")

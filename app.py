@@ -14,8 +14,11 @@ st.set_page_config(
 )
 
 # ── Inject global CSS ─────────────────────────────────────────────
-from ui.styles import GLOBAL_CSS
+from ui.styles import GLOBAL_CSS, DARK_MODE_CSS
 st.markdown(GLOBAL_CSS, unsafe_allow_html=True)
+# Apply dark mode immediately if previously toggled (avoids flash)
+if st.session_state.get("dark_mode"):
+    st.markdown(DARK_MODE_CSS, unsafe_allow_html=True)
 
 # ── Imports (after CSS so first paint is fast) ────────────────────
 from config.logging_config import setup_logging
@@ -94,7 +97,7 @@ def _render_sidebar_status():
     html += '<div class="health-title">System Health</div>'
     for label, value, ok in items:
         dot = "ok" if ok else "err"
-        val_color = "#b8860b" if ok else "#ef4444"
+        val_color = "var(--primary)" if ok else "var(--error)"
         html += (
             f'<div class="health-row">'
             f'<span class="health-label">{label}</span>'
@@ -119,9 +122,9 @@ def main():
             '<div style="margin-bottom:2rem">'
             '<h1 style="font-family:Manrope,sans-serif;font-size:1.15rem;'
             'font-weight:800;letter-spacing:-0.02em;line-height:1.3;margin:0">'
-            '<span style="color:#b8860b">SUPPLY CHAIN</span><br>'
-            '<span style="color:#0f172a">ALPHA</span></h1>'
-            '<p style="font-size:0.5625rem;color:#94a3b8;font-weight:800;'
+            '<span style="color:var(--primary)">SUPPLY CHAIN</span><br>'
+            '<span style="color:var(--on-surface)">ALPHA</span></h1>'
+            '<p style="font-size:0.5625rem;color:var(--on-surface-variant);font-weight:800;'
             'letter-spacing:0.2em;text-transform:uppercase;margin-top:0.5rem">'
             'Intelligent Curator</p></div>',
             unsafe_allow_html=True)
@@ -137,6 +140,18 @@ def main():
 
         st.write("")
         _render_sidebar_status()
+
+        st.write("")
+
+        # ── Dark mode toggle ──────────────────────────
+        dark = st.toggle("🌙 Dark Mode", value=st.session_state.get("dark_mode", False), key="dark_mode_toggle")
+        if dark != st.session_state.get("dark_mode", False):
+            st.session_state.dark_mode = dark
+            st.rerun()
+        st.session_state.dark_mode = dark
+
+        if st.session_state.get("dark_mode"):
+            st.markdown(DARK_MODE_CSS, unsafe_allow_html=True)
 
         st.write("")
         st.markdown(

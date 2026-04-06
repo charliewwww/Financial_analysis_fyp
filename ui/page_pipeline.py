@@ -87,6 +87,131 @@ def _get_recent_traces():
 
 
 # ═══════════════════════════════════════════════════════════════════
+# PIPELINE DIAGRAM — pure HTML/CSS (no external JS)
+# ═══════════════════════════════════════════════════════════════════
+
+_PIPELINE_STEPS = [
+    ("▶",  "START",    None),
+    ("📡", "Fetch",    "News · Prices · SEC · Macro"),
+    ("📝", "Summarize","Compress articles"),
+    ("🤔", "Reflect",  "Data sufficiency check"),
+    ("🧠", "Analyze",  "Deep RAG + LLM analysis"),
+    ("✅", "Validate", "Numerical + reasoning checks"),
+    ("📊", "Score",    "Confidence 1–10"),
+    ("💾", "Save",     "DB + ChromaDB"),
+    ("■",  "END",      None),
+]
+
+_LOOP_CONNECTIONS = [
+    (3, 1, "Insufficient"),   # Reflect → Fetch
+    (5, 4, "Failed"),         # Validate → Analyze
+]
+
+
+def _render_pipeline_diagram():
+    """Render the LangGraph pipeline as a CSS-Grid flowchart.
+
+    Uses a 2-column grid: column 1 holds nodes/arrows, column 2 holds
+    loop-back annotations.  Loop annotations use `grid-row` spans so
+    they always line up with the actual rendered node heights — no
+    pixel guessing required.
+
+    Grid rows (1-indexed):
+        Node i  → row  2*i + 1
+        Arrow i → row  2*i + 2   (arrow *after* node i)
+    Total rows = 2*N - 1  (N = len(_PIPELINE_STEPS))
+    """
+    total_rows = 2 * len(_PIPELINE_STEPS) - 1
+
+    # ── column-1 cells: nodes + arrows ────────────────────────────
+    cells_html = ""
+    for i, (icon, name, desc) in enumerate(_PIPELINE_STEPS):
+        row = 2 * i + 1  # 1-indexed grid row for this node
+        is_terminal = name in ("START", "END")
+        bg = ("linear-gradient(135deg,#b8860b,#d4af37)" if is_terminal
+              else "var(--surface-elevated)")
+        color = "#fff" if is_terminal else "var(--on-surface)"
+        border = ("2px solid #8b6508" if is_terminal
+                  else "1.5px solid var(--outline-variant)")
+        radius = "9999px" if is_terminal else "0.85rem"
+        shadow = ("0 4px 15px rgba(184,134,11,0.3)" if is_terminal
+                  else "0 2px 8px rgba(0,0,0,0.04)")
+        pad = "0.6rem 1.8rem" if is_terminal else "0.8rem 1.4rem"
+
+        desc_html = ""
+        if desc:
+            sub_color = ("rgba(255,255,255,0.7)" if is_terminal
+                         else "var(--on-surface-variant)")
+            desc_html = (f'<div style="font-size:0.68rem;color:{sub_color};'
+                         f'margin-top:2px;line-height:1.3">{desc}</div>')
+
+        cells_html += (
+            f'<div style="grid-column:1;grid-row:{row};'
+            f'display:flex;flex-direction:column;align-items:center">'
+            f'<div style="background:{bg};color:{color};border:{border};'
+            f'border-radius:{radius};padding:{pad};text-align:center;'
+            f'box-shadow:{shadow};min-width:140px;'
+            f'font-family:Manrope,sans-serif">'
+            f'<div style="font-weight:700;font-size:0.85rem">'
+            f'{icon} {name}</div>'
+            f'{desc_html}'
+            f'</div></div>'
+        )
+
+        # Arrow between nodes (not after last)
+        if i < len(_PIPELINE_STEPS) - 1:
+            arrow_row = row + 1
+            cells_html += (
+                f'<div style="grid-column:1;grid-row:{arrow_row};'
+                f'display:flex;flex-direction:column;align-items:center;'
+                f'padding:0.15rem 0">'
+                f'<div style="width:2px;height:16px;'
+                f'background:var(--on-surface-variant);opacity:0.5"></div>'
+                f'<div style="color:var(--on-surface-variant);font-size:0.65rem;'
+                f'font-weight:700;opacity:0.6">\u25bc</div>'
+                f'</div>'
+            )
+
+    # ── column-2 cells: loop-back annotations ─────────────────────
+    # Place each annotation in the SAME grid-row as its source node.
+    # No spanning — avoids all stretch/alignment issues.
+    for src_idx, tgt_idx, label in _LOOP_CONNECTIONS:
+        lc = "#ef4444"
+        src_row = 2 * src_idx + 1
+        tgt_name = _PIPELINE_STEPS[tgt_idx][1]
+        cells_html += (
+            f'<div style="grid-column:2;grid-row:{src_row};'
+            f'display:flex;align-items:center;padding-left:14px;'
+            f'font-family:Inter,sans-serif;font-size:0.65rem;'
+            f'color:{lc};font-weight:700;white-space:nowrap">'
+            # Horizontal dashed connector
+            f'<div style="width:20px;border-top:2px dashed {lc}"></div>'
+            # Badge + target
+            f'<div style="display:flex;flex-direction:column;align-items:center;'
+            f'margin-left:6px">'
+            f'<div style="border:2px dashed {lc};border-radius:0.5rem;'
+            f'padding:3px 10px">{label}</div>'
+            f'<div style="font-size:0.58rem;margin-top:3px;opacity:0.85">'
+            f'\u21bb back to {tgt_name}</div>'
+            f'</div>'
+            f'</div>'
+        )
+
+    # ── assemble grid ─────────────────────────────────────────────
+    st.markdown(
+        f'<div style="display:flex;justify-content:center;padding:1rem 0">'
+        f'<div style="display:grid;'
+        f'grid-template-columns:auto auto;'
+        f'grid-template-rows:repeat({total_rows}, auto);'
+        f'column-gap:0;row-gap:0;'
+        f'justify-items:center;align-items:center">'
+        f'{cells_html}'
+        f'</div></div>',
+        unsafe_allow_html=True,
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════
 # RENDER
 # ═══════════════════════════════════════════════════════════════════
 
@@ -104,26 +229,21 @@ def render():
 
     with col_graph:
         st.subheader("Analysis Pipeline")
-        # Render Mermaid via mermaid.js CDN embedded in HTML
-        import html as _html
-        _escaped = _html.escape(_MERMAID_GRAPH)
-        st.html(
-            f'<div class="mermaid" style="text-align:center">{_escaped}</div>'
-            '<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>'
-            '<script>mermaid.initialize({startOnLoad:true, theme:"neutral", '
-            'flowchart:{curve:"basis",nodeSpacing:30,rankSpacing:40}});</script>'
-        )
+        # Pure HTML/CSS pipeline diagram (no external JS dependency)
+        _render_pipeline_diagram()
 
     with col_info:
         st.subheader("Node Reference")
         for icon_name, desc in _NODE_INFO:
             st.markdown(
-                f'<div style="margin-bottom:0.75rem;padding:0.6rem 0.8rem;'
-                f'background:rgba(255,255,255,0.6);border-radius:0.75rem;'
-                f'border:1px solid #e2e8f0">'
-                f'<strong style="font-size:0.85rem">{icon_name}</strong>'
-                f'<p style="font-size:0.78rem;color:#64748b;margin:0.25rem 0 0">'
-                f'{desc}</p></div>',
+                f'<div style="margin-bottom:1rem;padding:0.85rem 1rem;'
+                f'background:var(--surface-card);border-radius:0.75rem;'
+                f'border:1px solid var(--outline-variant);overflow:hidden">'
+                f'<div style="font-size:0.85rem;font-weight:700;'
+                f'font-family:Manrope,sans-serif;color:var(--on-surface);'
+                f'margin-bottom:0.35rem">{icon_name}</div>'
+                f'<div style="font-size:0.78rem;color:var(--on-surface-variant);'
+                f'line-height:1.5;margin:0">{desc}</div></div>',
                 unsafe_allow_html=True,
             )
 
@@ -142,9 +262,9 @@ def render():
     for label, val in rows:
         html += (
             f'<div style="display:flex;justify-content:space-between;'
-            f'padding:0.35rem 0;border-bottom:1px solid #f1f5f9">'
-            f'<span style="color:#64748b">{label}</span>'
-            f'<span style="font-weight:600;color:#0f172a">{val}</span></div>'
+            f'padding:0.35rem 0;border-bottom:1px solid var(--bar-track-bg)">'
+            f'<span style="color:var(--on-surface-variant)">{label}</span>'
+            f'<span style="font-weight:600;color:var(--on-surface)">{val}</span></div>'
         )
     html += '</div>'
     st.markdown(html, unsafe_allow_html=True)
@@ -167,8 +287,8 @@ def render():
         if not execs:
             st.markdown(
                 f'<div style="padding:0.5rem 0.8rem;margin-bottom:0.5rem;'
-                f'background:#f8fafc;border-radius:0.5rem;font-size:0.8rem;'
-                f'color:#94a3b8">{sector} · {created} — no execution data</div>',
+                f'background:var(--surface);border-radius:0.5rem;font-size:0.8rem;'
+                f'color:var(--on-surface-variant)">{sector} · {created} — no execution data</div>',
                 unsafe_allow_html=True,
             )
             continue
@@ -177,7 +297,7 @@ def render():
             # Build a timeline table
             html = (
                 '<table style="width:100%;font-size:0.78rem;border-collapse:collapse">'
-                '<tr style="border-bottom:2px solid #e2e8f0;color:#64748b">'
+                '<tr style="border-bottom:2px solid var(--outline-variant);color:var(--on-surface-variant)">'
                 '<th style="text-align:left;padding:4px 8px">Node</th>'
                 '<th style="text-align:right;padding:4px 8px">Duration</th>'
                 '<th style="text-align:right;padding:4px 8px">Status</th>'
@@ -206,7 +326,7 @@ def render():
 
                 status_color = "#22c55e" if status == "completed" else "#ef4444"
                 html += (
-                    f'<tr style="border-bottom:1px solid #f1f5f9">'
+                    f'<tr style="border-bottom:1px solid var(--bar-track-bg)">'
                     f'<td style="padding:4px 8px;font-weight:600">{name}</td>'
                     f'<td style="text-align:right;padding:4px 8px">{dur:.1f}s</td>'
                     f'<td style="text-align:right;padding:4px 8px;color:{status_color}">{status}</td>'
@@ -215,7 +335,7 @@ def render():
                 )
 
             html += (
-                f'<tr style="border-top:2px solid #e2e8f0;font-weight:700">'
+                f'<tr style="border-top:2px solid var(--outline-variant);font-weight:700">'
                 f'<td style="padding:4px 8px">TOTAL</td>'
                 f'<td style="text-align:right;padding:4px 8px">{total_dur:.1f}s</td>'
                 f'<td style="text-align:right;padding:4px 8px"></td>'

@@ -41,7 +41,7 @@ def _cached_accuracy_over_time():
 
 def render():
     st.markdown('<h2 style="font-family:Manrope,sans-serif;font-weight:800;'
-                'letter-spacing:-0.03em;color:#0f172a">Prediction Tracker</h2>',
+                'letter-spacing:-0.03em;color:var(--on-surface)">Prediction Tracker</h2>',
                 unsafe_allow_html=True)
     st.caption("AI directional predictions with reasoning — verified against actual prices after 1 week")
 
@@ -71,7 +71,7 @@ def render():
                 f'<div class="kpi-card">'
                 f'<div class="kpi-label">{label}</div>'
                 f'<div class="kpi-value" style="font-size:1.75rem">{value}</div>'
-                f'<div style="font-size:0.7rem;color:#94a3b8;margin-top:0.25rem">{sub}</div>'
+                f'<div style="font-size:0.7rem;color:var(--on-surface-variant);margin-top:0.25rem">{sub}</div>'
                 f'</div>', unsafe_allow_html=True)
 
     st.write("")
@@ -130,7 +130,7 @@ def render():
                 f"{to_hkt_short(rpt['created_at'])}")
         with hdr_r:
             st.markdown(
-                f'<div style="text-align:right;font-size:0.8rem;color:#64748b">'
+                f'<div style="text-align:right;font-size:0.8rem;color:var(--on-surface-variant)">'
                 f'{status_icon} {checked}/{total_preds} verified'
                 f'</div>', unsafe_allow_html=True)
 
@@ -193,15 +193,15 @@ def _render_ai_predictions(preds: list[dict]):
                 # Price movement
                 price_html = ""
                 if price_at:
-                    price_html = f'<div style="font-size:0.78rem;color:#64748b;margin-top:4px">${price_at:.2f}'
+                    price_html = f'<div style="font-size:0.78rem;color:var(--on-surface-variant);margin-top:4px">${price_at:.2f}'
                     if price_1w is not None and actual_ch is not None:
                         arrow = "↑" if actual_ch > 0 else ("↓" if actual_ch < 0 else "→")
-                        ch_color = "#16a34a" if actual_ch > 0 else ("#dc2626" if actual_ch < 0 else "#64748b")
+                        ch_color = "#16a34a" if actual_ch > 0 else ("#dc2626" if actual_ch < 0 else "var(--on-surface-variant)")
                         price_html += (f' → ${price_1w:.2f} '
                                        f'<span style="color:{ch_color};font-weight:700">'
                                        f'{arrow} {actual_ch:+.1f}%</span>')
                     else:
-                        price_html += ' → <span style="color:#94a3b8">awaiting</span>'
+                        price_html += ' → <span style="color:var(--on-surface-variant)">awaiting</span>'
                     price_html += '</div>'
 
                 # Card HTML
@@ -223,9 +223,9 @@ def _render_ai_predictions(preds: list[dict]):
                     f'</div>'
                     f'{price_html}'
                     # Reasoning (visible by default!)
-                    f'{"<div style=" + chr(34) + "margin-top:0.75rem;font-size:0.82rem;line-height:1.6;color:#334155" + chr(34) + ">💭 " + ai_reasoning + "</div>" if ai_reasoning else ""}'
+                    f'{"<div style=" + chr(34) + "margin-top:0.75rem;font-size:0.82rem;line-height:1.6;color:var(--on-surface-variant)" + chr(34) + ">💭 " + ai_reasoning + "</div>" if ai_reasoning else ""}'
                     # Risk
-                    f'{"<div style=" + chr(34) + "margin-top:0.35rem;font-size:0.78rem;color:#b45309" + chr(34) + ">⚠️ " + ai_risk + "</div>" if ai_risk else ""}'
+                    f'{"<div style=" + chr(34) + "margin-top:0.35rem;font-size:0.78rem;color:#f59e0b" + chr(34) + ">⚠️ " + ai_risk + "</div>" if ai_risk else ""}'
                     f'</div>',
                     unsafe_allow_html=True)
 
@@ -251,29 +251,29 @@ def _render_no_prediction_cards(preds: list[dict]):
                 # Price line
                 price_html = ""
                 if price_at:
-                    price_html = f'<div style="font-size:0.78rem;color:#64748b;margin-top:4px">${price_at:.2f}'
+                    price_html = f'<div style="font-size:0.78rem;color:var(--on-surface-variant);margin-top:4px">${price_at:.2f}'
                     if price_1w is not None and actual_ch is not None:
                         arrow = "↑" if actual_ch > 0 else ("↓" if actual_ch < 0 else "→")
-                        ch_color = "#16a34a" if actual_ch > 0 else ("#dc2626" if actual_ch < 0 else "#64748b")
+                        ch_color = "#16a34a" if actual_ch > 0 else ("#dc2626" if actual_ch < 0 else "var(--on-surface-variant)")
                         price_html += (f' → ${price_1w:.2f} '
                                        f'<span style="color:{ch_color};font-weight:700">'
                                        f'{arrow} {actual_ch:+.1f}%</span>')
                     else:
-                        price_html += ' → <span style="color:#94a3b8">awaiting</span>'
+                        price_html += ' → <span style="color:var(--on-surface-variant)">awaiting</span>'
                     price_html += '</div>'
 
                 st.markdown(
-                    f'<div style="background:rgba(100,116,139,0.05);border-left:4px solid #cbd5e1;'
+                    f'<div style="background:rgba(100,116,139,0.05);border-left:4px solid var(--on-surface-variant);'
                     f'border-radius:1rem;padding:1rem 1.25rem;margin-bottom:0.5rem">'
                     f'<div style="display:flex;align-items:center;justify-content:space-between;'
                     f'margin-bottom:0.5rem">'
                     f'<span style="font-weight:800;font-size:1.1rem;font-family:Manrope,sans-serif">'
                     f'{ticker}</span>'
-                    f'<span style="color:#94a3b8;font-weight:700;font-size:0.75rem;'
+                    f'<span style="color:var(--on-surface-variant);font-weight:700;font-size:0.75rem;'
                     f'text-transform:uppercase;letter-spacing:0.05em">No prediction</span>'
                     f'</div>'
                     f'{price_html}'
-                    f'<div style="margin-top:0.5rem;font-size:0.78rem;color:#94a3b8">'
+                    f'<div style="margin-top:0.5rem;font-size:0.78rem;color:var(--on-surface-variant)">'
                     f'Mixed signals — no confident directional call'
                     f'</div>'
                     f'</div>',
@@ -338,7 +338,7 @@ def _render_accuracy_chart(accuracy_data: list[dict]):
         if not checked:
             # Helpful fallback instead of dead end
             st.markdown(
-                '<div style="padding:1.5rem;text-align:center;color:#64748b">'
+                '<div style="padding:1.5rem;text-align:center;color:var(--on-surface-variant)">'
                 '<div style="font-size:2rem;margin-bottom:0.5rem">📋</div>'
                 '<div style="font-size:0.9rem;font-weight:600;margin-bottom:0.5rem">'
                 'Accuracy tracking activates automatically</div>'
