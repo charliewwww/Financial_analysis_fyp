@@ -844,16 +844,36 @@ def validate_node(state: PipelineState) -> PipelineState:
         for line in response.split("\n"):
             if "⚠️" in line or "DISCREPANCY" in line.upper():
                 llm_issues.append(line.strip())
+            elif "❌" in line or "FLAW" in line.upper():
+                llm_issues.append(line.strip())
+
+        # Parse LLM dimension scores (1-5) for granular scoring
+        dimension_scores = {}
+        for dim_label in ("Logical Consistency", "Citation Completeness",
+                          "Supply Chain Depth", "Prediction-Evidence Alignment",
+                          "Prediction.Evidence Alignment"):
+            m = re.search(
+                rf'{dim_label}\s*[:=]\s*(\d)',
+                response, re.IGNORECASE,
+            )
+            if m:
+                canonical = dim_label.replace(".", "-").lower().replace(" ", "_")
+                dimension_scores[canonical] = int(m.group(1))
+        state.reasoning_scores = dimension_scores
 
         # ── Merge both layers ────────────────────────────────────
         all_issues = programmatic_issues + llm_issues
 
-        # Overall status: only FAILED when both layers agree
-        if programmatic_status == "FAILED" and llm_status == "FAILED":
+        # Determine if LLM found critical flaws (❌ FLAW lines)
+        has_reasoning_flaws = any("❌" in iss or "FLAW" in iss.upper() for iss in llm_issues)
+
+        # Overall status — programmatic numbers are objective truth
+        if programmatic_status == "FAILED":
+            # Numbers are objectively wrong — must retry to fix them
             state.validation_status = "FAILED"
-        elif programmatic_status == "FAILED" or llm_status == "FAILED":
-            # One layer failed — flag for review but don't hard-fail
-            state.validation_status = "PASSED WITH WARNINGS"
+        elif llm_status == "FAILED" or has_reasoning_flaws:
+            # LLM found critical reasoning flaws — retry
+            state.validation_status = "FAILED"
         elif "WARNING" in programmatic_status or "WARNING" in llm_status:
             state.validation_status = "PASSED WITH WARNINGS"
         elif programmatic_status == "PASSED" and llm_status == "PASSED":
@@ -986,8 +1006,19 @@ def score_node(state: PipelineState) -> PipelineState:
         breakdown["source_diversity"] = diversity_pts
 
         # ── 7. Validation result (max 2.0) ───────────────────────
+        #   Use LLM reasoning dimension scores for granular assessment
+        #   when available (1-5 per dimension → avg mapped to 0-2 pts).
+        #   Falls back to status-based scoring when scores aren't parsed.
         if state.validation_status == "FAILED":
             val_pts = 0.0
+        elif state.reasoning_scores:
+            # Average the LLM dimension scores (each 1-5)
+            avg_dim = sum(state.reasoning_scores.values()) / len(state.reasoning_scores)
+            # Map 1-5 avg → 0-2 pts:  (avg - 1) / 4 * 2
+            val_pts = round(max(0, min(2.0, (avg_dim - 1) / 4 * 2)), 2)
+            # If status is WARNING, cap at 1.5 (still has issues)
+            if "WARNING" in state.validation_status:
+                val_pts = min(val_pts, 1.5)
         elif "WARNING" in state.validation_status:
             val_pts = 1.0
         elif "PASSED" in state.validation_status:
@@ -1002,14 +1033,19 @@ def score_node(state: PipelineState) -> PipelineState:
         state.confidence_breakdown = breakdown
 
         node.decision = f"score={state.confidence_score}"
+        dim_info = ""
+        if state.reasoning_scores:
+            dim_info = " reasoning_dims=" + ",".join(
+                f"{k}={v}" for k, v in state.reasoning_scores.items()
+            )
         logger.info(
             "Confidence: %.1f/10 — news=%.1f price=%.1f ta=%.1f "
-            "filings=%.1f macro=%.1f diversity=%.1f validation=%.1f",
+            "filings=%.1f macro=%.1f diversity=%.1f validation=%.1f%s",
             state.confidence_score,
             breakdown["news_coverage"], breakdown["price_data"],
             breakdown["technicals"], breakdown["filings"],
             breakdown["macro_data"], breakdown["source_diversity"],
-            breakdown["validation"],
+            breakdown["validation"], dim_info,
         )
 
     return state

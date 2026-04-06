@@ -156,6 +156,7 @@ class PipelineState:
     validation_issues: list[str] = field(default_factory=list)  # List of discrepancies
     validation_retry_count: int = 0         # How many times analysis was re-run
     max_validation_retries: int = 1         # Max loops before accepting
+    reasoning_scores: dict = field(default_factory=dict)  # LLM dimension scores (1-5 each)
 
     # ── Node 6: Scoring ───────────────────────────────────────────
     confidence_score: float = 0.0           # Objective 1-10 score

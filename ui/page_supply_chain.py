@@ -1,21 +1,26 @@
 """
 Supply Chain Intelligence — interactive visualizations.
 
-Three core visualizations per sector:
+Four core visualizations per sector:
 1. Supply Chain Flow (Sankey diagram) — how materials/products flow
-2. Revenue Breakdown (horizontal bars) — how each company earns money
-3. Cost Structure (horizontal bars) — what each company spends on
+2. News Pulse (bubble chart) — news volume + AI sentiment per company
+3. Revenue Breakdown (horizontal bars) — how each company earns money
+4. Cost Structure (horizontal bars) — what each company spends on
 
-This page uses Plotly for all charts. Data comes from config/supply_chain_data.py
-which is a curated, relatively static dataset (only changes on major business shifts).
+This page uses Plotly for charts. Supply chain structure comes from
+config/supply_chain_data.py (curated from 10-K filings). The News Pulse
+chart is dynamically populated from the latest analysis report.
 """
 
+import json
 import streamlit as st
 import plotly.graph_objects as go
 
 from config.sectors import SECTORS
 from config.supply_chain_data import SUPPLY_CHAIN_DATA, get_supply_chain
+from database.reports_db import get_reports
 from ui.components import SECTOR_COLORS
+from utils.time_utils import to_hkt_short
 
 
 # ── Color palette ─────────────────────────────────────────────────
@@ -46,6 +51,67 @@ _COST_COLORS = [
     "#E57373", "#F06292", "#BA68C8", "#9575CD", "#7986CB",
     "#64B5F6", "#4FC3F7", "#4DD0E1", "#4DB6AC", "#81C784",
 ]
+
+
+# ── News activity helpers ─────────────────────────────────────────
+
+@st.cache_data(ttl=30)
+def _get_latest_report_news(sector_id: str) -> dict:
+    """
+    Get news activity data from the latest report for a sector.
+
+    Returns:
+        {
+            "available": bool,
+            "report_date": str or None,
+            "mention_counts": {ticker: int},  # how many articles mention each ticker
+            "articles": [{title, source, published, tickers_mentioned}],
+        }
+    """
+    reports = get_reports(sector_id=sector_id, limit=1)
+    if not reports:
+        return {"available": False, "report_date": None, "mention_counts": {}, "articles": []}
+
+    report = reports[0]
+    report_date = report.get("created_at")
+
+    # Get tickers for this sector
+    sector_cfg = SECTORS.get(sector_id, {})
+    sector_tickers = sector_cfg.get("tickers", [])
+
+    # Parse news snapshot
+    news_raw = report.get("news_snapshot", "[]")
+    try:
+        articles = json.loads(news_raw) if isinstance(news_raw, str) else (news_raw or [])
+    except (json.JSONDecodeError, TypeError):
+        articles = []
+
+    # Count mentions per ticker
+    mention_counts: dict[str, int] = {t: 0 for t in sector_tickers}
+    enriched_articles = []
+    for art in articles:
+        title = art.get("title", "")
+        summary = art.get("raw_summary", art.get("condensed_summary", ""))
+        text = f"{title} {summary}".upper()
+        tickers_mentioned = []
+        for t in sector_tickers:
+            if t in text:
+                mention_counts[t] = mention_counts.get(t, 0) + 1
+                tickers_mentioned.append(t)
+        if tickers_mentioned:
+            enriched_articles.append({
+                "title": title,
+                "source": art.get("source", ""),
+                "published": art.get("published", ""),
+                "tickers_mentioned": tickers_mentioned,
+            })
+
+    return {
+        "available": True,
+        "report_date": report_date,
+        "mention_counts": mention_counts,
+        "articles": enriched_articles[:15],  # top 15 relevant articles
+    }
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -82,12 +148,28 @@ def render():
                 unsafe_allow_html=True)
     st.caption(sector["description"])
 
+    # ── Fetch news activity data from latest report ───────────────
+    news_data = _get_latest_report_news(selected_id)
+
     # ── Supply Chain Flow (Sankey) ────────────────────
     with st.container(border=True):
         st.markdown('<span class="section-title">Supply Chain Flow</span>',
                     unsafe_allow_html=True)
         st.caption("How materials, components, and products flow from upstream to downstream")
         _render_sankey(sector)
+
+    # ── News Pulse Bubble Chart ───────────────────────────────────
+    st.write("")
+    with st.container(border=True):
+        st.markdown('<span class="section-title">News Pulse</span>',
+                    unsafe_allow_html=True)
+        if news_data["available"]:
+            report_date = to_hkt_short(news_data["report_date"]) if news_data["report_date"] else "Unknown"
+            st.caption(f"Company news activity from latest analysis ({report_date}) — "
+                       "circle size = news volume, color = AI sentiment")
+        else:
+            st.caption("Run an analysis from the Dashboard to see live news activity")
+        _render_news_bubble(selected_id, sector, news_data)
 
     st.write("")
 
@@ -206,15 +288,25 @@ def _render_sankey(sector: dict):
         except (ValueError, IndexError):
             link_rgba.append("rgba(200,169,81,0.3)")
 
+    # Build node labels — ticker only for clean display, full name on hover
+    node_labels = list(nodes_set)
+    node_hover = []
+    for n in nodes_set:
+        if n in companies:
+            node_hover.append(f"{n} — {companies[n]['name']}")
+        else:
+            node_hover.append(n)
+
     fig = go.Figure(data=[go.Sankey(
         arrangement="snap",
         node=dict(
-            pad=20,
-            thickness=25,
+            pad=25,
+            thickness=28,
             line=dict(color="#E8E4DE", width=1),
-            label=nodes_set,
+            label=node_labels,
             color=node_colors,
-            hovertemplate="%{label}<extra></extra>",
+            customdata=node_hover,
+            hovertemplate="%{customdata}<extra></extra>",
         ),
         link=dict(
             source=sources,
@@ -227,7 +319,7 @@ def _render_sankey(sector: dict):
     )])
 
     fig.update_layout(
-        font=dict(size=12, family="Inter, system-ui, sans-serif"),
+        font=dict(size=12, family="Inter, system-ui, sans-serif", color="#1e293b"),
         margin=dict(l=10, r=10, t=10, b=10),
         height=480,
         paper_bgcolor="rgba(0,0,0,0)",
@@ -249,6 +341,144 @@ def _render_sankey(sector: dict):
             )
         legend_html += '</div>'
         st.markdown(legend_html, unsafe_allow_html=True)
+
+
+# ═══════════════════════════════════════════════════════════════════
+# NEWS PULSE — Bubble chart (circle size = mentions, color = sentiment)
+# ═══════════════════════════════════════════════════════════════════
+
+def _render_news_bubble(sector_id: str, sector: dict, news_data: dict):
+    """Render a packed-bubble chart showing news volume and AI sentiment per ticker.
+
+    Inspired by market-news bubble maps: bigger circle = more news,
+    color = bullish (green) / bearish (red) / neutral (gray).
+    """
+    companies = sector.get("companies", {})
+    sector_cfg = SECTORS.get(sector_id, {})
+    tickers = sector_cfg.get("tickers", list(companies.keys()))
+
+    mention_counts = news_data.get("mention_counts", {}) if news_data.get("available") else {}
+
+    # Get AI sentiment from latest predictions
+    sentiment_map = {}  # ticker -> "BULLISH" / "BEARISH" / "NEUTRAL" / None
+    reports = get_reports(sector_id=sector_id, limit=1)
+    if reports:
+        from database.reports_db import get_predictions_for_report
+        preds = get_predictions_for_report(reports[0]["id"])
+        for p in preds:
+            sentiment_map[p["ticker"]] = p.get("ai_direction")
+
+    # Build bubble data
+    bubble_data = []
+    for t in tickers:
+        mentions = mention_counts.get(t, 0)
+        sentiment = sentiment_map.get(t)
+        name = companies.get(t, {}).get("name", t)
+        bubble_data.append({
+            "ticker": t,
+            "name": name,
+            "mentions": mentions,
+            "sentiment": sentiment,
+        })
+
+    # Sort by mentions descending for visual hierarchy
+    bubble_data.sort(key=lambda x: -x["mentions"])
+
+    if not news_data.get("available") or all(b["mentions"] == 0 for b in bubble_data):
+        # No analysis data — show placeholder bubbles
+        _render_bubble_placeholder(bubble_data)
+        return
+
+    # Determine colors and sizes
+    _SENT_COLORS = {
+        "BULLISH": "rgba(34,197,94,0.15)",
+        "BEARISH": "rgba(239,68,68,0.15)",
+        "NEUTRAL": "rgba(100,116,139,0.1)",
+        None: "rgba(100,116,139,0.08)",
+    }
+    _SENT_BORDER = {
+        "BULLISH": "#22c55e",
+        "BEARISH": "#ef4444",
+        "NEUTRAL": "#94a3b8",
+        None: "#cbd5e1",
+    }
+    _SENT_LABEL = {
+        "BULLISH": "📈",
+        "BEARISH": "📉",
+        "NEUTRAL": "➡️",
+        None: "",
+    }
+
+    max_mentions = max((b["mentions"] for b in bubble_data), default=1) or 1
+
+    # Render as HTML circles (responsive, no overlap issues)
+    html = '<div style="display:flex;flex-wrap:wrap;gap:12px;justify-content:center;align-items:center;padding:1rem 0">'
+    for b in bubble_data:
+        mentions = b["mentions"]
+        # Scale circle: min 64px, max 140px
+        if mentions > 0:
+            ratio = mentions / max_mentions
+            size = int(64 + 76 * ratio)
+        else:
+            size = 56
+        bg = _SENT_COLORS.get(b["sentiment"], _SENT_COLORS[None])
+        border = _SENT_BORDER.get(b["sentiment"], _SENT_BORDER[None])
+        icon = _SENT_LABEL.get(b["sentiment"], "")
+        font_size = max(0.7, min(1.1, size / 100))
+        ticker_size = max(0.8, min(1.3, size / 90))
+
+        mention_label = f'{mentions} mention{"s" if mentions != 1 else ""}' if mentions > 0 else "no news"
+
+        html += (
+            f'<div style="width:{size}px;height:{size}px;border-radius:50%;'
+            f'background:{bg};border:2px solid {border};'
+            f'display:flex;flex-direction:column;align-items:center;justify-content:center;'
+            f'cursor:default;transition:transform 0.2s" '
+            f'title="{b["name"]}\n{mention_label}\n{b["sentiment"] or "No prediction"}">'
+            f'<span style="font-weight:800;font-size:{ticker_size}rem;'
+            f'font-family:Manrope,sans-serif;color:#1e293b;line-height:1">'
+            f'{b["ticker"]}</span>'
+            f'<span style="font-size:{font_size * 0.6}rem;color:#64748b;margin-top:2px">'
+            f'{icon} {mention_label}</span>'
+            f'</div>'
+        )
+    html += '</div>'
+    st.markdown(html, unsafe_allow_html=True)
+
+    # Legend
+    st.markdown(
+        '<div style="display:flex;gap:16px;justify-content:center;margin-top:4px">'
+        '<span style="display:inline-flex;align-items:center;gap:4px;font-size:0.72rem;color:#64748b">'
+        '<span style="width:10px;height:10px;border-radius:50%;border:2px solid #22c55e;background:rgba(34,197,94,0.15)"></span>'
+        'Bullish</span>'
+        '<span style="display:inline-flex;align-items:center;gap:4px;font-size:0.72rem;color:#64748b">'
+        '<span style="width:10px;height:10px;border-radius:50%;border:2px solid #ef4444;background:rgba(239,68,68,0.15)"></span>'
+        'Bearish</span>'
+        '<span style="display:inline-flex;align-items:center;gap:4px;font-size:0.72rem;color:#64748b">'
+        '<span style="width:10px;height:10px;border-radius:50%;border:2px solid #94a3b8;background:rgba(100,116,139,0.1)"></span>'
+        'Neutral</span>'
+        '<span style="display:inline-flex;align-items:center;gap:4px;font-size:0.72rem;color:#64748b">'
+        '<span style="width:10px;height:10px;border-radius:50%;border:2px solid #cbd5e1;background:rgba(100,116,139,0.08)"></span>'
+        'No prediction</span>'
+        '</div>',
+        unsafe_allow_html=True)
+
+
+def _render_bubble_placeholder(bubble_data: list[dict]):
+    """Show uniform placeholder bubbles when no analysis data is available."""
+    html = '<div style="display:flex;flex-wrap:wrap;gap:12px;justify-content:center;align-items:center;padding:1rem 0">'
+    for b in bubble_data:
+        html += (
+            f'<div style="width:72px;height:72px;border-radius:50%;'
+            f'background:rgba(100,116,139,0.06);border:2px solid #e2e8f0;'
+            f'display:flex;flex-direction:column;align-items:center;justify-content:center">'
+            f'<span style="font-weight:800;font-size:0.9rem;font-family:Manrope,sans-serif;'
+            f'color:#94a3b8">{b["ticker"]}</span>'
+            f'</div>'
+        )
+    html += '</div>'
+    st.markdown(html, unsafe_allow_html=True)
+    st.caption("Run an analysis to populate news activity and sentiment data")
 
 
 # ═══════════════════════════════════════════════════════════════════

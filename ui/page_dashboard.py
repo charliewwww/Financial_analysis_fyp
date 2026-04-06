@@ -270,6 +270,8 @@ def _new_job() -> dict:
         "cancelled": False,
         "total_sectors": 0,
         "completed_sectors": 0,
+        "active_node": None,          # currently executing graph node
+        "completed_nodes": [],        # list of node names already finished
     }
 
 
@@ -317,8 +319,28 @@ def _analysis_worker(job: dict, selected_ids: list[str] | None = None):
         def on_progress(event_type, message, _name=sector["name"]):
             if event_type == "node":
                 _log("  ↳", f"{_name}: {message}")
+                # Track active node for the live pipeline graph
+                node_map = {
+                    "📡": "fetch", "📝": "summarize", "🤔": "reflect",
+                    "🧠": "analyze", "✅": "validate", "📊": "score",
+                    "💾": "save",
+                }
+                for emoji, node_name in node_map.items():
+                    if emoji in message:
+                        with _job_lock:
+                            prev = job.get("active_node")
+                            if prev and prev != node_name and prev not in job["completed_nodes"]:
+                                job["completed_nodes"].append(prev)
+                            job["active_node"] = node_name
+                        break
 
         result = run_sector_analysis(sid, sector, progress_fn=on_progress)
+        # Reset pipeline graph for next sector
+        with _job_lock:
+            if job.get("active_node") and job["active_node"] not in job["completed_nodes"]:
+                job["completed_nodes"].append(job["active_node"])
+            job["active_node"] = None
+            job["completed_nodes"] = []
         if result.get("error"):
             _log("❌", f"{sector['name']}: {result['error']}")
         else:
@@ -408,8 +430,84 @@ def _analysis_worker(job: dict, selected_ids: list[str] | None = None):
         job["finished_at"] = _time.time()
 
 
+_PIPELINE_NODES = [
+    ("fetch",     "📡 Fetch"),
+    ("summarize", "📝 Summarize"),
+    ("reflect",   "🤔 Reflect"),
+    ("analyze",   "🧠 Analyze"),
+    ("validate",  "✅ Validate"),
+    ("score",     "📊 Score"),
+    ("save",      "💾 Save"),
+]
+
+
+def _render_live_pipeline_graph(job: dict):
+    """Render an HTML pipeline graph with the active node highlighted."""
+    with _job_lock:
+        active = job.get("active_node")
+        completed = list(job.get("completed_nodes", []))
+
+    nodes_html = ""
+    for i, (node_id, label) in enumerate(_PIPELINE_NODES):
+        if node_id == active:
+            bg = "linear-gradient(135deg,#b8860b,#d4af37)"
+            color = "#fff"
+            border = "2px solid #8b6508"
+            shadow = "0 0 12px rgba(184,134,11,0.5)"
+            anim = "animation:pulse-node 1.5s ease-in-out infinite;"
+        elif node_id in completed:
+            bg = "#22c55e"
+            color = "#fff"
+            border = "2px solid #16a34a"
+            shadow = "none"
+            anim = ""
+        else:
+            bg = "#f1f5f9"
+            color = "#94a3b8"
+            border = "1px solid #e2e8f0"
+            shadow = "none"
+            anim = ""
+
+        nodes_html += (
+            f'<div style="display:flex;flex-direction:column;align-items:center;'
+            f'min-width:0;flex:1">'
+            f'<div style="padding:0.45rem 0.6rem;border-radius:0.6rem;'
+            f'background:{bg};color:{color};border:{border};box-shadow:{shadow};'
+            f'font-size:0.72rem;font-weight:700;white-space:nowrap;{anim}'
+            f'text-align:center">{label}</div>'
+            f'</div>'
+        )
+        # Arrow between nodes
+        if i < len(_PIPELINE_NODES) - 1:
+            arrow_color = "#22c55e" if node_id in completed else "#cbd5e1"
+            nodes_html += (
+                f'<div style="display:flex;align-items:center;color:{arrow_color};'
+                f'font-size:0.9rem;font-weight:700;margin:0 2px">→</div>'
+            )
+
+    html = (
+        '<style>@keyframes pulse-node{'
+        '0%,100%{transform:scale(1);opacity:1}'
+        '50%{transform:scale(1.06);opacity:0.85}'
+        '}</style>'
+        '<div style="display:flex;align-items:center;justify-content:center;'
+        'gap:0;padding:0.8rem 0.5rem;margin-bottom:0.75rem;'
+        'background:rgba(255,255,255,0.7);border-radius:1rem;'
+        'border:1px solid #e2e8f0;overflow-x:auto">'
+        f'{nodes_html}'
+        '</div>'
+    )
+    st.markdown(html, unsafe_allow_html=True)
+
+
+@st.fragment(run_every=2)
 def _render_analysis_progress():
-    """Poll the background job and render progress / results."""
+    """Poll the background job and render progress / results.
+
+    Decorated with @st.fragment(run_every=2) so only this section
+    re-renders every 2 seconds — the rest of the page (and sidebar
+    navigation) stays responsive while analysis runs.
+    """
     job = st.session_state.get(_JOB_KEY)
     if job is None:
         return  # No job has been started
@@ -423,6 +521,9 @@ def _render_analysis_progress():
 
         # Progress bar
         st.progress(pct, text=f"Analyzing {done_s}/{total_s} sectors complete · {elapsed:.0f}s elapsed")
+
+        # ── Live pipeline graph ───────────────────────────────────
+        _render_live_pipeline_graph(job)
 
         with st.status(f"Running LangGraph pipeline … ({elapsed:.0f}s)", expanded=True):
             with _job_lock:
@@ -445,9 +546,7 @@ def _render_analysis_progress():
             job["cancel"].set()
             st.toast("⏳ Cancellation requested — will stop after current sector finishes.")
 
-        # Auto-refresh every 2 seconds
-        _time.sleep(2)
-        st.rerun()
+        # Fragment auto-reruns every 2 seconds via @st.fragment(run_every=2)
     else:
         # ── Finished — show results and clear running state ───────
         elapsed = (job["finished_at"] or _time.time()) - job["started_at"]

@@ -530,6 +530,19 @@ def _run_sector_graph(
     except Exception as e:
         logger.debug("Eval scoring skipped: %s", e)
 
+    # ── Run LLM-as-Judge evaluation ───────────────────────────────
+    # Uses a separate LLM call to grade analysis quality on 5 dimensions.
+    # Scores are pushed to the same Langfuse trace for side-by-side comparison.
+    try:
+        from evals.llm_judge import run_llm_judge
+        judge_scores = run_llm_judge(state)
+        if judge_scores:
+            logger.info(
+                "LLM judge: overall=%.2f", judge_scores.get("judge_overall", 0)
+            )
+    except Exception as e:
+        logger.debug("LLM judge skipped: %s", e)
+
     return state
 
 

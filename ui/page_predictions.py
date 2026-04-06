@@ -82,44 +82,65 @@ def render():
 
     st.write("")
 
-    # ── Prediction cards per report ───────────────────────────────
+    # ── Report selector ───────────────────────────────────────────
     reports = _cached_reports_list(limit=50)
-    has_any_predictions = False
+    # Filter to reports that have predictions
+    reports_with_preds = []
     for rpt in reports:
         preds = _cached_predictions(rpt["id"])
-        if not preds:
-            continue
-        has_any_predictions = True
-        checked = sum(1 for p in preds if p.get("price_1w_later") is not None)
-        total_preds = len(preds)
-        ai_preds = [p for p in preds if p.get("ai_direction")]
-        status_icon = "✅" if checked == total_preds else ("⏳" if checked == 0 else "🔄")
+        if preds:
+            reports_with_preds.append((rpt, preds))
 
-        with st.container(border=True):
-            # Header row with sector + summary
-            hdr_l, hdr_r = st.columns([3, 1])
-            with hdr_l:
-                st.markdown(
-                    f"**{rpt['sector_name']}** · "
-                    f"{to_hkt_short(rpt['created_at'])}")
-            with hdr_r:
-                st.markdown(
-                    f'<div style="text-align:right;font-size:0.8rem;color:#64748b">'
-                    f'{status_icon} {checked}/{total_preds} verified'
-                    f'</div>', unsafe_allow_html=True)
-
-            # AI Prediction cards — show reasoning prominently
-            if ai_preds:
-                _render_ai_predictions(ai_preds)
-            else:
-                _render_predictions_table(preds)
-
-    if not has_any_predictions:
+    if not reports_with_preds:
         st.info(
             "**No predictions yet.** Run an analysis from the Dashboard — "
             "the AI will generate directional predictions for each stock "
             "in the analysed sectors."
         )
+        return
+
+    # Build selector options: "Sector · Date"
+    selector_options = [
+        f"{rpt['sector_name']} · {to_hkt_short(rpt['created_at'])}"
+        for rpt, _ in reports_with_preds
+    ]
+
+    col_sel, _ = st.columns([3, 3])
+    with col_sel:
+        selected_idx = st.selectbox(
+            "Select Report",
+            range(len(selector_options)),
+            format_func=lambda i: selector_options[i],
+            label_visibility="collapsed",
+        )
+
+    rpt, preds = reports_with_preds[selected_idx]
+    checked = sum(1 for p in preds if p.get("price_1w_later") is not None)
+    total_preds = len(preds)
+    ai_preds = [p for p in preds if p.get("ai_direction")]
+    no_ai_preds = [p for p in preds if not p.get("ai_direction")]
+    status_icon = "✅" if checked == total_preds else ("⏳" if checked == 0 else "🔄")
+
+    with st.container(border=True):
+        # Header row with sector + summary
+        hdr_l, hdr_r = st.columns([3, 1])
+        with hdr_l:
+            st.markdown(
+                f"**{rpt['sector_name']}** · "
+                f"{to_hkt_short(rpt['created_at'])}")
+        with hdr_r:
+            st.markdown(
+                f'<div style="text-align:right;font-size:0.8rem;color:#64748b">'
+                f'{status_icon} {checked}/{total_preds} verified'
+                f'</div>', unsafe_allow_html=True)
+
+        # AI Prediction cards
+        if ai_preds:
+            _render_ai_predictions(ai_preds)
+        if no_ai_preds:
+            _render_no_prediction_cards(no_ai_preds)
+        if not ai_preds and not no_ai_preds:
+            _render_predictions_table(preds)
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -148,7 +169,12 @@ def _render_ai_predictions(preds: list[dict]):
                 ticker = pred.get("ticker", "?")
                 ai_change = pred.get("ai_predicted_change", "")
                 ai_reasoning = pred.get("ai_reasoning", "")
+                # Truncate long reasoning to keep cards compact
+                if len(ai_reasoning) > 150:
+                    ai_reasoning = ai_reasoning[:147] + "..."
                 ai_risk = pred.get("ai_risk", "")
+                if len(ai_risk) > 80:
+                    ai_risk = ai_risk[:77] + "..."
                 price_at = pred.get("price_at_report")
                 price_1w = pred.get("price_1w_later")
                 actual_ch = pred.get("actual_change_1w")
@@ -200,6 +226,56 @@ def _render_ai_predictions(preds: list[dict]):
                     f'{"<div style=" + chr(34) + "margin-top:0.75rem;font-size:0.82rem;line-height:1.6;color:#334155" + chr(34) + ">💭 " + ai_reasoning + "</div>" if ai_reasoning else ""}'
                     # Risk
                     f'{"<div style=" + chr(34) + "margin-top:0.35rem;font-size:0.78rem;color:#b45309" + chr(34) + ">⚠️ " + ai_risk + "</div>" if ai_risk else ""}'
+                    f'</div>',
+                    unsafe_allow_html=True)
+
+
+# ═══════════════════════════════════════════════════════════════════
+# "NO PREDICTION" CARDS — tickers without AI directional prediction
+# ═══════════════════════════════════════════════════════════════════
+
+def _render_no_prediction_cards(preds: list[dict]):
+    """Render cards for tickers where the AI couldn't make a confident prediction."""
+    cols_per_row = min(len(preds), 3)
+    for row_start in range(0, len(preds), cols_per_row):
+        row_preds = preds[row_start:row_start + cols_per_row]
+        cols = st.columns(len(row_preds))
+
+        for col, pred in zip(cols, row_preds):
+            with col:
+                ticker = pred.get("ticker", "?")
+                price_at = pred.get("price_at_report")
+                price_1w = pred.get("price_1w_later")
+                actual_ch = pred.get("actual_change_1w")
+
+                # Price line
+                price_html = ""
+                if price_at:
+                    price_html = f'<div style="font-size:0.78rem;color:#64748b;margin-top:4px">${price_at:.2f}'
+                    if price_1w is not None and actual_ch is not None:
+                        arrow = "↑" if actual_ch > 0 else ("↓" if actual_ch < 0 else "→")
+                        ch_color = "#16a34a" if actual_ch > 0 else ("#dc2626" if actual_ch < 0 else "#64748b")
+                        price_html += (f' → ${price_1w:.2f} '
+                                       f'<span style="color:{ch_color};font-weight:700">'
+                                       f'{arrow} {actual_ch:+.1f}%</span>')
+                    else:
+                        price_html += ' → <span style="color:#94a3b8">awaiting</span>'
+                    price_html += '</div>'
+
+                st.markdown(
+                    f'<div style="background:rgba(100,116,139,0.05);border-left:4px solid #cbd5e1;'
+                    f'border-radius:1rem;padding:1rem 1.25rem;margin-bottom:0.5rem">'
+                    f'<div style="display:flex;align-items:center;justify-content:space-between;'
+                    f'margin-bottom:0.5rem">'
+                    f'<span style="font-weight:800;font-size:1.1rem;font-family:Manrope,sans-serif">'
+                    f'{ticker}</span>'
+                    f'<span style="color:#94a3b8;font-weight:700;font-size:0.75rem;'
+                    f'text-transform:uppercase;letter-spacing:0.05em">No prediction</span>'
+                    f'</div>'
+                    f'{price_html}'
+                    f'<div style="margin-top:0.5rem;font-size:0.78rem;color:#94a3b8">'
+                    f'Mixed signals — no confident directional call'
+                    f'</div>'
                     f'</div>',
                     unsafe_allow_html=True)
 
