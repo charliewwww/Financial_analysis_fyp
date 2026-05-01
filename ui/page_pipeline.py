@@ -344,6 +344,26 @@ def render():
             )
             st.markdown(html, unsafe_allow_html=True)
 
+    # ── Admin: LangGraph Official Visualisation ─────────────────────
+    st.write("")
+    st.write("")
+    with st.expander("🔐 Admin — LangGraph Topology (official)", expanded=False):
+        try:
+            from workflows.weekly_analysis import _get_compiled_graph
+            compiled = _get_compiled_graph()
+            graph_obj = compiled.get_graph()
+
+            # Try PNG first (uses mermaid.ink API), fall back to mermaid text
+            try:
+                png_bytes = graph_obj.draw_mermaid_png()
+                st.image(png_bytes, caption="LangGraph compiled graph", use_container_width=False)
+            except Exception:
+                mermaid_src = graph_obj.draw_mermaid()
+                st.code(mermaid_src, language="mermaid")
+                st.caption("PNG rendering unavailable — raw Mermaid source shown above.")
+        except Exception as e:
+            st.error(f"Could not load graph: {e}")
+
     # ── Admin: Langfuse (hidden by default) ───────────────────────
     st.write("")
     st.write("")

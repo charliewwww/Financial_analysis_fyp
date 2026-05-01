@@ -1,0 +1,35 @@
+# Alpha Lens — Backend Dependencies
+#
+# Install:  pip install -r requirements.txt
+# Run:      uvicorn app.main:app --reload --port 8000
+
+# ── Web framework ─────────────────────────────────────────────────
+fastapi==0.115.12
+uvicorn[standard]==0.34.0
+
+# ── Data validation ───────────────────────────────────────────────
+pydantic==2.11.3
+pydantic-settings==2.9.1
+
+# ── Database ─────────────────────────────────────────────────
+asyncpg==0.30.0          # PostgreSQL (production)
+aiosqlite==0.21.0        # SQLite (local dev — no PostgreSQL needed)
+# SQLAlchemy async core — used for migrations and query building
+sqlalchemy[asyncio]==2.0.40
+
+# ── SSE streaming ─────────────────────────────────────────────────
+sse-starlette==2.2.1
+
+# ── Env file loading ──────────────────────────────────────────────
+python-dotenv==1.1.0
+
+# ── LLM / Pipeline (shared with the Streamlit app) ────────────────
+openai==1.78.0
+langgraph==0.4.1
+langchain-core==0.3.56
+
+# ── Vector store ─────────────────────────────────────────────────
+chromadb==0.6.3
+
+# ── HTTP (data sources) ──────────────────────────────────────────
+httpx==0.28.1

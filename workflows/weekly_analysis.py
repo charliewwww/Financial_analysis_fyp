@@ -569,6 +569,10 @@ def _state_to_result(state: PipelineState) -> dict:
         "data_sufficiency": state.data_sufficiency,
         "news_summary": state.news_summary,
         "validation_status": state.validation_status,
+        # Backend bridge: full PipelineState so the FastAPI runner can build
+        # a SignalCardDraft after the legacy pipeline finishes.  Streamlit
+        # ignores this key.
+        "pipeline_state": state,
     }
 
 

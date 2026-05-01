@@ -29,13 +29,13 @@ from config.logging_config import setup_logging
 setup_logging("INFO")
 
 from config.sectors import SECTORS
-from ui import page_dashboard, page_reports, page_predictions, page_supply_chain, page_pipeline
+from ui import page_dashboard, page_reports, page_predictions, page_supply_chain, page_pipeline, page_evaluation
 
 
 # ═══════════════════════════════════════════════════════════════════
 # NAVIGATION
 # ═══════════════════════════════════════════════════════════════════
-PAGES = ["Overview", "Supply Chain", "Analysis", "Predictions", "System"]
+PAGES = ["Overview", "Supply Chain", "Analysis", "Predictions", "Evaluation", "System"]
 
 
 def _init_session():
@@ -179,6 +179,7 @@ def main():
      "Supply Chain": page_supply_chain.render,
      "Analysis": page_reports.render,
      "Predictions": page_predictions.render,
+     "Evaluation": page_evaluation.render,
      "System": page_pipeline.render}[st.session_state.page]()
 
 
