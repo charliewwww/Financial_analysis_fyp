@@ -6164,3 +6164,495 @@ ValueError: <Token var=<ContextVar name='current_context' default={} at 0x000002
 2026-04-06 21:57:44  INFO      workflows.weekly_analysis         ──────────────────────────────────────────────
 2026-04-06 21:57:44  INFO      workflows.weekly_analysis         ⏱  SECTOR TOTAL               1491.4s
 2026-04-06 21:57:44  WARNING   agents.llm_client               Cancellation requested — aborting LLM calls
+2026-04-14 09:07:04  INFO      agents.llm_client               Langfuse tracing ENABLED → https://us.cloud.langfuse.com
+2026-04-14 09:12:23  INFO      agents.llm_client               LLM health check passed (google/gemma-4-31b-it via openrouter)
+2026-04-14 09:12:23  INFO      workflows.weekly_analysis       ──────────────────────────────────────────────────
+2026-04-14 09:12:23  INFO      workflows.weekly_analysis       Analyzing: AI & Semiconductors
+2026-04-14 09:12:23  INFO      workflows.weekly_analysis       ──────────────────────────────────────────────────
+2026-04-14 09:12:23  INFO      workflows.weekly_analysis       Langfuse trace created: 0714380d7cfd8a914f1b45009b552356
+2026-04-14 09:12:23  INFO      workflows.nodes                 Starting concurrent data fetch (5 sources)...
+2026-04-14 09:12:28  INFO      data_sources.sec_edgar          Downloading NVDA 10-K (2026-02-25)...
+2026-04-14 09:12:28  INFO      workflows.weekly_analysis       ──────────────────────────────────────────────────
+2026-04-14 09:12:28  INFO      workflows.weekly_analysis       Analyzing: Space & Rocket Technology
+2026-04-14 09:12:28  INFO      workflows.weekly_analysis       ──────────────────────────────────────────────────
+2026-04-14 09:12:28  INFO      workflows.weekly_analysis       Langfuse trace created: 77decca143104cf19576903b515f8ed2
+2026-04-14 09:12:28  INFO      workflows.nodes                 Starting concurrent data fetch (5 sources)...
+2026-04-14 09:12:30  INFO      data_sources.sec_edgar          Extracted: Management Discussion & Analysis (MD&A), Risk Factors, Business Overview (6015 chars)
+2026-04-14 09:12:30  INFO      data_sources.sec_edgar          Downloading NVDA 10-Q (2025-11-19)...
+2026-04-14 09:12:32  INFO      data_sources.sec_edgar          Downloading RKLB 10-K (2026-02-26)...
+2026-04-14 09:12:33  INFO      data_sources.sec_edgar          Extracted: Management Discussion & Analysis (MD&A), Risk Factors (5923 chars)
+2026-04-14 09:12:33  INFO      workflows.weekly_analysis       ──────────────────────────────────────────────────
+2026-04-14 09:12:33  INFO      workflows.weekly_analysis       Analyzing: Optical & Light Communication
+2026-04-14 09:12:33  INFO      workflows.weekly_analysis       ──────────────────────────────────────────────────
+2026-04-14 09:12:33  INFO      workflows.weekly_analysis       Langfuse trace created: d21abc2fc431a42cfa62057d1f324c3b
+2026-04-14 09:12:33  INFO      workflows.nodes                 Starting concurrent data fetch (5 sources)...
+2026-04-14 09:12:37  INFO      data_sources.sec_edgar          Extracted: Management Discussion & Analysis (MD&A), Risk Factors (6015 chars)
+2026-04-14 09:12:37  INFO      data_sources.sec_edgar          Downloading AMD 10-K (2026-02-04)...
+2026-04-14 09:12:37  INFO      data_sources.sec_edgar          Downloading RKLB 10-Q (2025-11-10)...
+2026-04-14 09:12:37  INFO      data_sources.sec_edgar          Downloading LITE 10-K (2025-08-19)...
+2026-04-14 09:12:39  INFO      data_sources.sec_edgar          Extracted: Management Discussion & Analysis (MD&A), Risk Factors, Business Overview (6015 chars)
+2026-04-14 09:12:39  INFO      data_sources.sec_edgar          Downloading AMD 10-Q (2025-11-05)...
+2026-04-14 09:12:40  INFO      data_sources.sec_edgar          Extracted: Management Discussion & Analysis (MD&A), Risk Factors (6015 chars)
+2026-04-14 09:12:42  INFO      data_sources.sec_edgar          Extracted: Management Discussion & Analysis (MD&A), Risk Factors (6015 chars)
+2026-04-14 09:12:42  INFO      data_sources.sec_edgar          Downloading LITE 10-Q (2026-02-04)...
+2026-04-14 09:12:43  INFO      data_sources.rss_fetcher        Fetching per-ticker Google News for 10 tickers...
+2026-04-14 09:12:43  INFO      data_sources.sec_edgar          Extracted: Management Discussion & Analysis (MD&A), Risk Factors (5954 chars)
+2026-04-14 09:12:44  INFO      data_sources.sec_edgar          Downloading BA 10-K (2026-01-30)...
+2026-04-14 09:12:45  INFO      data_sources.sec_edgar          Extracted: Management Discussion & Analysis (MD&A), Risk Factors (5995 chars)
+2026-04-14 09:12:45  INFO      data_sources.rss_fetcher        NVDA: +3 articles from Google News (had 0 from general feeds)
+2026-04-14 09:12:48  INFO      data_sources.rss_fetcher        AMD: +3 articles from Google News (had 0 from general feeds)
+2026-04-14 09:12:48  INFO      data_sources.sec_edgar          Extracted: Management Discussion & Analysis (MD&A), Risk Factors, Business Overview (6015 chars)
+2026-04-14 09:12:48  INFO      data_sources.sec_edgar          Downloading BA 10-Q (2025-10-29)...
+2026-04-14 09:12:48  INFO      data_sources.rss_fetcher        Fetching per-ticker Google News for 7 tickers...
+2026-04-14 09:12:50  INFO      data_sources.sec_edgar          Downloading COHR 10-K (2025-08-15)...
+2026-04-14 09:12:51  INFO      data_sources.sec_edgar          Extracted: Management Discussion & Analysis (MD&A), Risk Factors (5938 chars)
+2026-04-14 09:12:51  INFO      data_sources.rss_fetcher        RKLB: +3 articles from Google News (had 0 from general feeds)
+2026-04-14 09:12:51  INFO      data_sources.rss_fetcher        TSM: +3 articles from Google News (had 0 from general feeds)
+2026-04-14 09:12:53  INFO      data_sources.sec_edgar          Extracted: Management Discussion & Analysis (MD&A), Risk Factors, Business Overview (6015 chars)
+2026-04-14 09:12:53  INFO      data_sources.sec_edgar          Downloading COHR 10-Q (2026-02-04)...
+2026-04-14 09:12:53  INFO      data_sources.rss_fetcher        AVGO: +3 articles from Google News (had 0 from general feeds)
+2026-04-14 09:12:53  INFO      data_sources.rss_fetcher        BA: +3 articles from Google News (had 0 from general feeds)
+2026-04-14 09:12:53  INFO      data_sources.sec_edgar          Downloading AVGO 10-K (2025-12-18)...
+2026-04-14 09:12:54  INFO      data_sources.rss_fetcher        Fetching per-ticker Google News for 6 tickers...
+2026-04-14 09:12:55  INFO      data_sources.sec_edgar          Extracted: Management Discussion & Analysis (MD&A), Risk Factors (6015 chars)
+2026-04-14 09:12:55  INFO      data_sources.sec_edgar          Downloading LMT 10-K (2026-01-29)...
+2026-04-14 09:12:56  INFO      data_sources.rss_fetcher        LMT: +3 articles from Google News (had 0 from general feeds)
+2026-04-14 09:12:57  INFO      data_sources.rss_fetcher        SMCI: +3 articles from Google News (had 0 from general feeds)
+2026-04-14 09:12:57  INFO      data_sources.rss_fetcher        LITE: +3 articles from Google News (had 0 from general feeds)
+2026-04-14 09:12:58  INFO      data_sources.sec_edgar          Extracted: Management Discussion & Analysis (MD&A), Risk Factors, Business Overview (6015 chars)
+2026-04-14 09:12:58  INFO      data_sources.sec_edgar          Downloading AVGO 10-Q (2026-03-11)...
+2026-04-14 09:12:59  INFO      data_sources.sec_edgar          Extracted: Management Discussion & Analysis (MD&A), Risk Factors, Business Overview (6015 chars)
+2026-04-14 09:12:59  INFO      data_sources.sec_edgar          Downloading LMT 10-Q (2025-10-21)...
+2026-04-14 09:12:59  INFO      data_sources.rss_fetcher        CEG: +3 articles from Google News (had 0 from general feeds)
+2026-04-14 09:12:59  INFO      data_sources.rss_fetcher        NOC: +3 articles from Google News (had 0 from general feeds)
+2026-04-14 09:12:59  INFO      data_sources.rss_fetcher        COHR: +3 articles from Google News (had 0 from general feeds)
+2026-04-14 09:12:59  INFO      data_sources.sec_edgar          Extracted: Management Discussion & Analysis (MD&A), Risk Factors (6015 chars)
+2026-04-14 09:13:01  INFO      data_sources.sec_edgar          Extracted: Management Discussion & Analysis (MD&A), Risk Factors, Business Overview (6015 chars)
+2026-04-14 09:13:01  INFO      data_sources.rss_fetcher        MSFT: +3 articles from Google News (had 0 from general feeds)
+2026-04-14 09:13:01  INFO      data_sources.sec_edgar          Downloading CIEN 10-K (2025-12-12)...
+2026-04-14 09:13:01  INFO      data_sources.rss_fetcher        SPCE: +3 articles from Google News (had 0 from general feeds)
+2026-04-14 09:13:01  INFO      data_sources.rss_fetcher        CIEN: +3 articles from Google News (had 0 from general feeds)
+2026-04-14 09:13:02  INFO      data_sources.rss_fetcher        GOOGL: +3 articles from Google News (had 0 from general feeds)
+2026-04-14 09:13:03  INFO      data_sources.sec_edgar          Downloading SMCI 10-K (2025-08-28)...
+2026-04-14 09:13:03  INFO      data_sources.rss_fetcher        ASTS: +3 articles from Google News (had 0 from general feeds)
+2026-04-14 09:13:03  INFO      data_sources.sec_edgar          Extracted: Management Discussion & Analysis (MD&A), Risk Factors (6015 chars)
+2026-04-14 09:13:03  INFO      data_sources.sec_edgar          Downloading CIEN 10-Q (2026-03-05)...
+2026-04-14 09:13:03  INFO      data_sources.rss_fetcher        ANET: +3 articles from Google News (had 0 from general feeds)
+2026-04-14 09:13:03  INFO      data_sources.sec_edgar          Downloading NOC 10-K (2026-01-27)...
+2026-04-14 09:13:04  INFO      data_sources.rss_fetcher        META: +3 articles from Google News (had 0 from general feeds)
+2026-04-14 09:13:05  INFO      data_sources.sec_edgar          Extracted: Management Discussion & Analysis (MD&A), Risk Factors (5896 chars)
+2026-04-14 09:13:05  INFO      data_sources.rss_fetcher        GSAT: +3 articles from Google News (had 0 from general feeds)
+2026-04-14 09:13:05  INFO      data_sources.rss_fetcher        Per-ticker coverage: {'RKLB': 3, 'BA': 3, 'LMT': 3, 'NOC': 3, 'SPCE': 3, 'ASTS': 3, 'GSAT': 3}
+2026-04-14 09:13:06  INFO      data_sources.rss_fetcher        KEYS: +3 articles from Google News (had 0 from general feeds)
+2026-04-14 09:13:07  INFO      data_sources.sec_edgar          Extracted: Management Discussion & Analysis (MD&A), Risk Factors, Business Overview (6015 chars)
+2026-04-14 09:13:07  INFO      data_sources.sec_edgar          Downloading NOC 10-Q (2025-10-21)...
+2026-04-14 09:13:07  INFO      data_sources.rss_fetcher        AMZN: +3 articles from Google News (had 0 from general feeds)
+2026-04-14 09:13:07  INFO      data_sources.rss_fetcher        Per-ticker coverage: {'NVDA': 3, 'AMD': 3, 'TSM': 3, 'AVGO': 3, 'SMCI': 3, 'CEG': 3, 'MSFT': 3, 'GOOGL': 3, 'META': 3, 'AMZN': 3}
+2026-04-14 09:13:07  INFO      data_sources.rss_fetcher        VIAV: +3 articles from Google News (had 0 from general feeds)
+2026-04-14 09:13:07  INFO      data_sources.rss_fetcher        Per-ticker coverage: {'LITE': 3, 'COHR': 3, 'CIEN': 3, 'ANET': 3, 'KEYS': 3, 'VIAV': 3}
+2026-04-14 09:13:08  INFO      data_sources.sec_edgar          Extracted: Management Discussion & Analysis (MD&A), Risk Factors, Business Overview (6015 chars)
+2026-04-14 09:13:08  INFO      data_sources.sec_edgar          Downloading SMCI 10-Q (2026-02-06)...
+2026-04-14 09:13:09  INFO      data_sources.sec_edgar          Extracted: Management Discussion & Analysis (MD&A), Risk Factors (5836 chars)
+2026-04-14 09:13:09  INFO      data_sources.sec_edgar          Downloading ANET 10-K (2026-02-17)...
+2026-04-14 09:13:10  INFO      data_sources.sec_edgar          Extracted: Management Discussion & Analysis (MD&A), Risk Factors (5877 chars)
+2026-04-14 09:13:11  INFO      data_sources.sec_edgar          Extracted: Management Discussion & Analysis (MD&A), Risk Factors (6015 chars)
+2026-04-14 09:13:11  INFO      data_sources.sec_edgar          Downloading ANET 10-Q (2025-11-05)...
+2026-04-14 09:13:11  INFO      data_sources.sec_edgar          Downloading SPCE 10-K (2026-03-30)...
+2026-04-14 09:13:12  INFO      data_sources.sec_edgar          Downloading CEG 10-K (2026-02-24)...
+2026-04-14 09:13:12  INFO      data_sources.sec_edgar          Extracted: Management Discussion & Analysis (MD&A), Risk Factors (5999 chars)
+2026-04-14 09:13:13  INFO      data_sources.sec_edgar          Extracted: Management Discussion & Analysis (MD&A), Risk Factors (6015 chars)
+2026-04-14 09:13:13  INFO      data_sources.sec_edgar          Downloading SPCE 10-Q (2025-11-13)...
+2026-04-14 09:13:15  INFO      data_sources.sec_edgar          Extracted: Management Discussion & Analysis (MD&A), Risk Factors, Business Overview (6015 chars)
+2026-04-14 09:13:15  INFO      data_sources.sec_edgar          Downloading CEG 10-Q (2025-11-07)...
+2026-04-14 09:13:15  INFO      data_sources.sec_edgar          Extracted: Management Discussion & Analysis (MD&A), Risk Factors (6015 chars)
+2026-04-14 09:13:17  INFO      data_sources.sec_edgar          Downloading KEYS 10-K (2025-12-17)...
+2026-04-14 09:13:17  INFO      data_sources.sec_edgar          Extracted: Management Discussion & Analysis (MD&A), Risk Factors (6015 chars)
+2026-04-14 09:13:18  INFO      data_sources.sec_edgar          Downloading ASTS 10-K (2026-03-02)...
+2026-04-14 09:13:19  INFO      data_sources.sec_edgar          Extracted: Management Discussion & Analysis (MD&A), Risk Factors, Business Overview (6015 chars)
+2026-04-14 09:13:19  INFO      data_sources.sec_edgar          Downloading KEYS 10-Q (2026-03-05)...
+2026-04-14 09:13:20  INFO      data_sources.sec_edgar          Extracted: Management Discussion & Analysis (MD&A), Risk Factors (6015 chars)
+2026-04-14 09:13:20  INFO      data_sources.sec_edgar          Downloading ASTS 10-Q (2025-11-10)...
+2026-04-14 09:13:21  INFO      data_sources.sec_edgar          Downloading MSFT 10-K (2025-07-30)...
+2026-04-14 09:13:21  INFO      data_sources.sec_edgar          Extracted: Management Discussion & Analysis (MD&A), Risk Factors (5991 chars)
+2026-04-14 09:13:22  INFO      data_sources.sec_edgar          Extracted: Management Discussion & Analysis (MD&A), Risk Factors (5998 chars)
+2026-04-14 09:13:25  INFO      data_sources.sec_edgar          Extracted: Management Discussion & Analysis (MD&A), Risk Factors (5947 chars)
+2026-04-14 09:13:25  INFO      data_sources.sec_edgar          Downloading MSFT 10-Q (2026-01-28)...
+2026-04-14 09:13:25  INFO      data_sources.sec_edgar          Downloading VIAV 10-K (2025-08-11)...
+2026-04-14 09:13:26  INFO      data_sources.sec_edgar          Downloading GSAT 10-K (2026-02-27)...
+2026-04-14 09:13:29  INFO      data_sources.sec_edgar          Extracted: Management Discussion & Analysis (MD&A), Risk Factors (6015 chars)
+2026-04-14 09:13:30  INFO      data_sources.sec_edgar          Extracted: Management Discussion & Analysis (MD&A), Risk Factors, Business Overview (6015 chars)
+2026-04-14 09:13:30  INFO      data_sources.sec_edgar          Downloading VIAV 10-Q (2026-01-29)...
+2026-04-14 09:13:31  INFO      data_sources.sec_edgar          Extracted: Management Discussion & Analysis (MD&A), Risk Factors (6015 chars)
+2026-04-14 09:13:31  INFO      data_sources.sec_edgar          Downloading GSAT 10-Q (2025-11-06)...
+2026-04-14 09:13:32  INFO      data_sources.sec_edgar          Extracted: Management Discussion & Analysis (MD&A), Risk Factors (6015 chars)
+2026-04-14 09:13:32  INFO      workflows.nodes                 Got price data for 6/6 tickers
+2026-04-14 09:13:32  INFO      workflows.nodes                 Computed technicals for 6/6 tickers
+2026-04-14 09:13:32  INFO      workflows.nodes                 Found 12 filings (12 with extracted text)
+2026-04-14 09:13:32  INFO      workflows.nodes                 Got 5 macro indicators (Fed rate, CPI, GDP, etc.)
+2026-04-14 09:13:32  INFO      workflows.nodes                 Ingesting into vector store...
+2026-04-14 09:13:32  INFO      data_sources.sec_edgar          Extracted: Management Discussion & Analysis (MD&A), Risk Factors (5876 chars)
+2026-04-14 09:13:32  INFO      workflows.nodes                 Got price data for 7/7 tickers
+2026-04-14 09:13:32  INFO      workflows.nodes                 Computed technicals for 7/7 tickers
+2026-04-14 09:13:32  INFO      workflows.nodes                 Found 14 filings (14 with extracted text)
+2026-04-14 09:13:32  INFO      workflows.nodes                 Got 5 macro indicators (Fed rate, CPI, GDP, etc.)
+2026-04-14 09:13:32  INFO      workflows.nodes                 Ingesting into vector store...
+2026-04-14 09:13:33  INFO      data_sources.sec_edgar          Downloading GOOGL 10-K (2026-02-05)...
+2026-04-14 09:13:34  INFO      data_sources.sec_edgar          Extracted: Management Discussion & Analysis (MD&A), Risk Factors, Business Overview (6015 chars)
+2026-04-14 09:13:34  INFO      data_sources.sec_edgar          Downloading GOOGL 10-Q (2025-10-30)...
+2026-04-14 09:13:39  INFO      data_sources.sec_edgar          Extracted: Management Discussion & Analysis (MD&A), Risk Factors (6015 chars)
+2026-04-14 09:13:45  INFO      workflows.nodes                 Stored 15 articles + 27 filing sections
+2026-04-14 09:13:45  INFO      workflows.nodes                 Stored 19 articles + 32 filing sections
+2026-04-14 09:13:45  INFO      data_sources.sec_edgar          Downloading META 10-K (2026-01-29)...
+2026-04-14 09:13:45  INFO      agents.llm_client               Calling google/gemma-4-31b-it...
+2026-04-14 09:13:45  INFO      agents.llm_client               Calling google/gemma-4-31b-it...
+2026-04-14 09:13:46  INFO      data_sources.sec_edgar          Extracted: Management Discussion & Analysis (MD&A), Risk Factors, Business Overview (6015 chars)
+2026-04-14 09:13:46  INFO      data_sources.sec_edgar          Downloading META 10-Q (2025-10-30)...
+2026-04-14 09:13:48  INFO      data_sources.sec_edgar          Extracted: Management Discussion & Analysis (MD&A), Risk Factors (6015 chars)
+2026-04-14 09:13:50  INFO      data_sources.sec_edgar          Downloading AMZN 10-K (2026-02-06)...
+2026-04-14 09:13:51  INFO      agents.llm_client               Tokens: 4397 in → 367 out
+2026-04-14 09:13:51  INFO      agents.llm_client               Calling google/gemma-4-31b-it...
+2026-04-14 09:13:52  INFO      data_sources.sec_edgar          Extracted: Management Discussion & Analysis (MD&A), Risk Factors, Business Overview (6015 chars)
+2026-04-14 09:13:52  INFO      data_sources.sec_edgar          Downloading AMZN 10-Q (2025-10-31)...
+2026-04-14 09:13:53  INFO      data_sources.sec_edgar          Extracted: Management Discussion & Analysis (MD&A), Risk Factors (5857 chars)
+2026-04-14 09:13:53  INFO      workflows.nodes                 Got price data for 10/10 tickers
+2026-04-14 09:13:53  INFO      workflows.nodes                 Computed technicals for 10/10 tickers
+2026-04-14 09:13:53  INFO      workflows.nodes                 Found 18 filings (18 with extracted text)
+2026-04-14 09:13:53  INFO      workflows.nodes                 Got 5 macro indicators (Fed rate, CPI, GDP, etc.)
+2026-04-14 09:13:53  INFO      workflows.nodes                 Ingesting into vector store...
+2026-04-14 09:13:54  INFO      agents.llm_client               Tokens: 402 in → 45 out
+2026-04-14 09:13:54  INFO      workflows.nodes                 Data reflection: ✅ SUFFICIENT
+2026-04-14 09:13:54  INFO      workflows.nodes                 Querying vector store for historical context...
+2026-04-14 09:13:58  INFO      workflows.nodes                 Stored 30 articles + 44 filing sections
+2026-04-14 09:13:58  INFO      agents.llm_client               Calling google/gemma-4-31b-it...
+2026-04-14 09:13:58  INFO      workflows.nodes                 Found 37 relevant docs (4.0s)
+2026-04-14 09:13:58  INFO      utils.anomaly_detection         Detected 10 anomalies (6 high severity)
+2026-04-14 09:13:58  WARNING   workflows.nodes                 Prompt too long (95174 chars, budget 60000) — trimming 35174 chars
+2026-04-14 09:13:58  INFO      workflows.nodes                 Trimmed filings section → 18751 chars (within budget)
+2026-04-14 09:13:58  INFO      workflows.nodes                 Reasoning about Optical & Light Communication...
+2026-04-14 09:13:58  INFO      agents.llm_client               Calling google/gemma-4-31b-it...
+2026-04-14 09:14:19  INFO      agents.llm_client               Tokens: 7837 in → 1942 out
+2026-04-14 09:14:19  INFO      workflows.nodes                 Parsed 4 AI predictions: ANET, COHR, KEYS, LITE
+2026-04-14 09:14:19  INFO      workflows.nodes                 Layer 1: Programmatic number check...
+2026-04-14 09:14:19  INFO      workflows.nodes                 Checked 25 claims: 6 verified, 7 discrepancies, 12 unchecked
+2026-04-14 09:14:19  INFO      workflows.nodes                 Layer 2: LLM reasoning check...
+2026-04-14 09:14:19  INFO      agents.llm_client               Calling google/gemma-4-31b-it...
+2026-04-14 09:14:29  INFO      agents.llm_client               Tokens: 6104 in → 342 out
+2026-04-14 09:14:29  INFO      agents.llm_client               Calling google/gemma-4-31b-it...
+2026-04-14 09:14:31  INFO      agents.llm_client               Tokens: 413 in → 45 out
+2026-04-14 09:14:31  INFO      workflows.nodes                 Data reflection: ✅ SUFFICIENT
+2026-04-14 09:14:31  INFO      workflows.nodes                 Querying vector store for historical context...
+2026-04-14 09:14:32  INFO      agents.llm_client               Tokens: 4274 in → 508 out
+2026-04-14 09:14:32  INFO      workflows.nodes                 Combined: FAILED (7 numeric + 3 reasoning issues)
+2026-04-14 09:14:32  INFO      workflows.nodes                 Validation FAILED — re-analyzing (attempt 1/1)...
+2026-04-14 09:14:32  INFO      workflows.nodes                 Querying vector store for historical context...
+2026-04-14 09:14:34  INFO      workflows.nodes                 Found 35 relevant docs (3.0s)
+2026-04-14 09:14:35  INFO      utils.anomaly_detection         Detected 16 anomalies (5 high severity)
+2026-04-14 09:14:35  WARNING   workflows.nodes                 Prompt too long (135969 chars, budget 60000) — trimming 75969 chars
+2026-04-14 09:14:35  INFO      workflows.nodes                 Trimmed filings section → 21148 chars (within budget)
+2026-04-14 09:14:35  INFO      workflows.nodes                 Reasoning about AI & Semiconductors...
+2026-04-14 09:14:35  INFO      agents.llm_client               Calling google/gemma-4-31b-it...
+2026-04-14 09:14:35  INFO      workflows.nodes                 Found 37 relevant docs (2.9s)
+2026-04-14 09:14:35  INFO      utils.anomaly_detection         Detected 10 anomalies (6 high severity)
+2026-04-14 09:14:35  INFO      workflows.nodes                 Injected 10 validation issues into re-analysis prompt
+2026-04-14 09:14:35  WARNING   workflows.nodes                 Prompt too long (97011 chars, budget 60000) — trimming 37011 chars
+2026-04-14 09:14:35  INFO      workflows.nodes                 Trimmed filings section → 20588 chars (within budget)
+2026-04-14 09:14:35  INFO      workflows.nodes                 Reasoning about Optical & Light Communication...
+2026-04-14 09:14:35  INFO      agents.llm_client               Calling google/gemma-4-31b-it...
+2026-04-14 09:15:07  INFO      agents.llm_client               Tokens: 5063 in → 380 out
+2026-04-14 09:15:07  INFO      agents.llm_client               Calling google/gemma-4-31b-it...
+2026-04-14 09:15:11  INFO      agents.llm_client               Tokens: 396 in → 59 out
+2026-04-14 09:15:11  INFO      workflows.nodes                 Data reflection: ✅ SUFFICIENT
+2026-04-14 09:15:11  INFO      workflows.nodes                 Querying vector store for historical context...
+2026-04-14 09:15:12  INFO      workflows.nodes                 Found 39 relevant docs (1.5s)
+2026-04-14 09:15:12  INFO      utils.anomaly_detection         Detected 1 anomalies (0 high severity)
+2026-04-14 09:15:12  WARNING   workflows.nodes                 Prompt too long (108226 chars, budget 60000) — trimming 48226 chars
+2026-04-14 09:15:12  INFO      workflows.nodes                 Trimmed filings section → 17995 chars (within budget)
+2026-04-14 09:15:12  INFO      workflows.nodes                 Reasoning about Space & Rocket Technology...
+2026-04-14 09:15:12  INFO      agents.llm_client               Calling google/gemma-4-31b-it...
+2026-04-14 09:17:22  INFO      agents.llm_client               Tokens: 7577 in → 2010 out
+2026-04-14 09:17:22  INFO      workflows.nodes                 Parsed 4 AI predictions: ASTS, RKLB, BA, LMT
+2026-04-14 09:17:22  INFO      workflows.nodes                 Layer 1: Programmatic number check...
+2026-04-14 09:17:22  INFO      workflows.nodes                 Checked 24 claims: 7 verified, 9 discrepancies, 8 unchecked
+2026-04-14 09:17:22  INFO      workflows.nodes                 Layer 2: LLM reasoning check...
+2026-04-14 09:17:22  INFO      agents.llm_client               Calling google/gemma-4-31b-it...
+2026-04-14 09:18:33  INFO      agents.llm_client               Tokens: 4389 in → 533 out
+2026-04-14 09:18:33  INFO      workflows.nodes                 Combined: FAILED (9 numeric + 3 reasoning issues)
+2026-04-14 09:18:33  INFO      workflows.nodes                 Validation FAILED — re-analyzing (attempt 1/1)...
+2026-04-14 09:18:33  INFO      workflows.nodes                 Querying vector store for historical context...
+2026-04-14 09:18:36  INFO      workflows.nodes                 Found 39 relevant docs (3.7s)
+2026-04-14 09:18:36  INFO      utils.anomaly_detection         Detected 1 anomalies (0 high severity)
+2026-04-14 09:18:37  INFO      workflows.nodes                 Injected 12 validation issues into re-analysis prompt
+2026-04-14 09:18:37  WARNING   workflows.nodes                 Prompt too long (110187 chars, budget 60000) — trimming 50187 chars
+2026-04-14 09:18:37  INFO      workflows.nodes                 Trimmed filings section → 19956 chars (within budget)
+2026-04-14 09:18:37  INFO      workflows.nodes                 Reasoning about Space & Rocket Technology...
+2026-04-14 09:18:37  INFO      agents.llm_client               Calling google/gemma-4-31b-it...
+2026-04-14 09:19:30  INFO      agents.llm_client               Tokens: 8395 in → 1860 out
+2026-04-14 09:19:30  INFO      workflows.nodes                 Parsed 4 AI predictions: COHR, ANET, KEYS, LITE
+2026-04-14 09:19:30  INFO      workflows.nodes                 Layer 1: Programmatic number check...
+2026-04-14 09:19:30  INFO      workflows.nodes                 Checked 22 claims: 7 verified, 8 discrepancies, 7 unchecked
+2026-04-14 09:19:30  INFO      workflows.nodes                 Layer 2: LLM reasoning check...
+2026-04-14 09:19:30  INFO      agents.llm_client               Calling google/gemma-4-31b-it...
+2026-04-14 09:19:52  INFO      agents.llm_client               Tokens: 9067 in → 1952 out
+2026-04-14 09:19:52  INFO      workflows.nodes                 Parsed 4 AI predictions: NVDA, AVGO, AMD, TSM
+2026-04-14 09:19:52  INFO      workflows.nodes                 Layer 1: Programmatic number check...
+2026-04-14 09:19:52  INFO      workflows.nodes                 Checked 30 claims: 7 verified, 9 discrepancies, 14 unchecked
+2026-04-14 09:19:52  INFO      workflows.nodes                 Layer 2: LLM reasoning check...
+2026-04-14 09:19:52  INFO      agents.llm_client               Calling google/gemma-4-31b-it...
+2026-04-14 09:20:21  INFO      agents.llm_client               Tokens: 4120 in → 599 out
+2026-04-14 09:20:21  INFO      workflows.nodes                 Combined: FAILED (8 numeric + 2 reasoning issues)
+2026-04-14 09:20:21  WARNING   workflows.nodes                 Validation still FAILED after 1 retries — scoring anyway
+2026-04-14 09:20:21  INFO      workflows.nodes                 Confidence: 7.8/10 — news=2.5 price=2.0 ta=1.0 filings=0.5 macro=0.8 diversity=1.0 validation=0.0 reasoning_dims=logical_consistency=2,citation_completeness=4,supply_chain_depth=5,prediction-evidence_alignment=4
+2026-04-14 09:20:23  INFO      workflows.nodes                 Stored analysis in vector DB (4 chunks)
+2026-04-14 09:20:23  INFO      workflows.nodes                 Report #61 saved to database
+2026-04-14 09:20:26  INFO      evals.scoring                   Pushed 8 eval scores to Langfuse trace d21abc2f (overall=0.57)
+2026-04-14 09:20:26  INFO      workflows.weekly_analysis       Eval scores: overall=0.57
+2026-04-14 09:20:26  ERROR     evals.llm_judge                 LLM judge call failed: call_llm_fast() got an unexpected keyword argument 'temperature'
+2026-04-14 09:20:26  INFO      workflows.weekly_analysis       Optical & Light Communication — Report #61 saved
+2026-04-14 09:20:26  INFO      workflows.weekly_analysis         ⏱  fetch_news                    0.0s  [completed]
+2026-04-14 09:20:26  INFO      workflows.weekly_analysis         ⏱  fetch_prices                  0.0s  [completed]
+2026-04-14 09:20:26  INFO      workflows.weekly_analysis         ⏱  fetch_technicals              0.0s  [completed]
+2026-04-14 09:20:26  INFO      workflows.weekly_analysis         ⏱  fetch_filings                 0.0s  [completed]
+2026-04-14 09:20:26  INFO      workflows.weekly_analysis         ⏱  fetch_macro                   0.1s  [completed]
+2026-04-14 09:20:26  INFO      workflows.weekly_analysis         ⏱  ingest_vectordb              12.9s  [completed]
+2026-04-14 09:20:26  INFO      workflows.weekly_analysis         ⏱  summarize                     6.2s  [completed]
+2026-04-14 09:20:26  INFO      workflows.weekly_analysis         ⏱  reflect                       3.4s  [completed]
+2026-04-14 09:20:26  INFO      workflows.weekly_analysis         ⏱  rag_query                     4.0s  [completed]
+2026-04-14 09:20:26  INFO      workflows.weekly_analysis         ⏱  analyze                      21.1s  [completed]
+2026-04-14 09:20:26  INFO      workflows.weekly_analysis         ⏱  validate_numbers              0.0s  [completed]
+2026-04-14 09:20:26  INFO      workflows.weekly_analysis         ⏱  validate_reasoning           12.4s  [completed]
+2026-04-14 09:20:26  INFO      workflows.weekly_analysis         ⏱  rag_query                     2.9s  [completed]
+2026-04-14 09:20:26  INFO      workflows.weekly_analysis         ⏱  analyze                     295.0s  [completed]
+2026-04-14 09:20:26  INFO      workflows.weekly_analysis         ⏱  validate_numbers              0.0s  [completed]
+2026-04-14 09:20:26  INFO      workflows.weekly_analysis         ⏱  validate_reasoning           51.4s  [completed]
+2026-04-14 09:20:26  INFO      workflows.weekly_analysis         ⏱  score                         0.0s  [completed]
+2026-04-14 09:20:26  INFO      workflows.weekly_analysis         ⏱  ingest_analysis               1.5s  [completed]
+2026-04-14 09:20:26  INFO      workflows.weekly_analysis         ⏱  save_to_db                    0.0s  [completed]
+2026-04-14 09:20:26  INFO      workflows.weekly_analysis         ──────────────────────────────────────────────
+2026-04-14 09:20:26  INFO      workflows.weekly_analysis         ⏱  SECTOR TOTAL                469.3s
+2026-04-14 09:20:29  INFO      agents.llm_client               Tokens: 8245 in → 1952 out
+2026-04-14 09:20:29  INFO      workflows.nodes                 Parsed 4 AI predictions: ASTS, BA, RKLB, LMT
+2026-04-14 09:20:29  INFO      workflows.nodes                 Layer 1: Programmatic number check...
+2026-04-14 09:20:29  INFO      workflows.nodes                 Checked 24 claims: 8 verified, 10 discrepancies, 6 unchecked
+2026-04-14 09:20:29  INFO      workflows.nodes                 Layer 2: LLM reasoning check...
+2026-04-14 09:20:29  INFO      agents.llm_client               Calling google/gemma-4-31b-it...
+2026-04-14 09:20:42  INFO      agents.llm_client               Tokens: 4372 in → 635 out
+2026-04-14 09:20:42  INFO      workflows.nodes                 Combined: FAILED (10 numeric + 4 reasoning issues)
+2026-04-14 09:20:42  WARNING   workflows.nodes                 Validation still FAILED after 1 retries — scoring anyway
+2026-04-14 09:20:42  INFO      workflows.nodes                 Confidence: 7.8/10 — news=2.5 price=2.0 ta=1.0 filings=0.5 macro=0.8 diversity=1.0 validation=0.0 reasoning_dims=logical_consistency=1,citation_completeness=4,supply_chain_depth=5,prediction-evidence_alignment=2
+2026-04-14 09:20:43  INFO      workflows.nodes                 Stored analysis in vector DB (5 chunks)
+2026-04-14 09:20:43  INFO      workflows.nodes                 Report #62 saved to database
+2026-04-14 09:20:46  INFO      evals.scoring                   Pushed 8 eval scores to Langfuse trace 77decca1 (overall=0.55)
+2026-04-14 09:20:46  INFO      workflows.weekly_analysis       Eval scores: overall=0.55
+2026-04-14 09:20:46  ERROR     evals.llm_judge                 LLM judge call failed: call_llm_fast() got an unexpected keyword argument 'temperature'
+2026-04-14 09:20:46  INFO      workflows.weekly_analysis       Space & Rocket Technology — Report #62 saved
+2026-04-14 09:20:46  INFO      workflows.weekly_analysis         ⏱  fetch_news                    0.0s  [completed]
+2026-04-14 09:20:46  INFO      workflows.weekly_analysis         ⏱  fetch_prices                  0.0s  [completed]
+2026-04-14 09:20:46  INFO      workflows.weekly_analysis         ⏱  fetch_technicals              0.0s  [completed]
+2026-04-14 09:20:46  INFO      workflows.weekly_analysis         ⏱  fetch_filings                 0.0s  [completed]
+2026-04-14 09:20:46  INFO      workflows.weekly_analysis         ⏱  fetch_macro                   0.0s  [completed]
+2026-04-14 09:20:46  INFO      workflows.weekly_analysis         ⏱  ingest_vectordb              12.5s  [completed]
+2026-04-14 09:20:46  INFO      workflows.weekly_analysis         ⏱  summarize                    81.9s  [completed]
+2026-04-14 09:20:46  INFO      workflows.weekly_analysis         ⏱  reflect                       4.1s  [completed]
+2026-04-14 09:20:46  INFO      workflows.weekly_analysis         ⏱  rag_query                     1.5s  [completed]
+2026-04-14 09:20:46  INFO      workflows.weekly_analysis         ⏱  analyze                     129.3s  [completed]
+2026-04-14 09:20:46  INFO      workflows.weekly_analysis         ⏱  validate_numbers              0.0s  [completed]
+2026-04-14 09:20:46  INFO      workflows.weekly_analysis         ⏱  validate_reasoning           71.2s  [completed]
+2026-04-14 09:20:46  INFO      workflows.weekly_analysis         ⏱  rag_query                     3.7s  [completed]
+2026-04-14 09:20:46  INFO      workflows.weekly_analysis         ⏱  analyze                     112.6s  [completed]
+2026-04-14 09:20:46  INFO      workflows.weekly_analysis         ⏱  validate_numbers              0.0s  [completed]
+2026-04-14 09:20:46  INFO      workflows.weekly_analysis         ⏱  validate_reasoning           12.5s  [completed]
+2026-04-14 09:20:46  INFO      workflows.weekly_analysis         ⏱  score                         0.0s  [completed]
+2026-04-14 09:20:46  INFO      workflows.weekly_analysis         ⏱  ingest_analysis               1.5s  [completed]
+2026-04-14 09:20:46  INFO      workflows.weekly_analysis         ⏱  save_to_db                    0.0s  [completed]
+2026-04-14 09:20:46  INFO      workflows.weekly_analysis         ──────────────────────────────────────────────
+2026-04-14 09:20:46  INFO      workflows.weekly_analysis         ⏱  SECTOR TOTAL                494.9s
+2026-04-14 09:21:33  INFO      agents.llm_client               Tokens: 4896 in → 562 out
+2026-04-14 09:21:33  INFO      workflows.nodes                 Combined: FAILED (9 numeric + 3 reasoning issues)
+2026-04-14 09:21:33  INFO      workflows.nodes                 Validation FAILED — re-analyzing (attempt 1/1)...
+2026-04-14 09:21:33  INFO      workflows.nodes                 Querying vector store for historical context...
+2026-04-14 09:21:37  INFO      workflows.nodes                 Found 35 relevant docs (3.5s)
+2026-04-14 09:21:37  INFO      utils.anomaly_detection         Detected 16 anomalies (5 high severity)
+2026-04-14 09:21:37  INFO      workflows.nodes                 Injected 12 validation issues into re-analysis prompt
+2026-04-14 09:21:37  WARNING   workflows.nodes                 Prompt too long (138114 chars, budget 60000) — trimming 78114 chars
+2026-04-14 09:21:37  INFO      workflows.nodes                 Trimmed filings section → 23293 chars (within budget)
+2026-04-14 09:21:37  INFO      workflows.nodes                 Reasoning about AI & Semiconductors...
+2026-04-14 09:21:37  INFO      agents.llm_client               Calling google/gemma-4-31b-it...
+2026-04-14 09:40:52  WARNING   langfuse                        Connection error.
+2026-04-14 09:40:52  WARNING   agents.llm_client               LLM call failed (attempt 1/4): Connection error. — retrying in 1.7s
+2026-04-14 09:50:46  INFO      agents.llm_client               Calling google/gemma-4-31b-it... (retry 1)
+2026-04-14 09:50:48  WARNING   langfuse                        Connection error.
+2026-04-14 09:50:48  WARNING   agents.llm_client               LLM call failed (attempt 2/4): Connection error. — retrying in 4.8s
+2026-04-14 09:50:49  ERROR     opentelemetry.sdk._shared_internal  Exception while exporting Span.
+Traceback (most recent call last):
+  File "C:\Users\pkbcc\OneDrive\Desktop\internship\fyp\venv\Lib\site-packages\urllib3\connection.py", line 204, in _new_conn
+    sock = connection.create_connection(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pkbcc\OneDrive\Desktop\internship\fyp\venv\Lib\site-packages\urllib3\util\connection.py", line 60, in create_connection
+    for res in socket.getaddrinfo(host, port, family, socket.SOCK_STREAM):
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pkbcc\AppData\Local\Programs\Python\Python312\Lib\socket.py", line 963, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+socket.gaierror: [Errno 11001] getaddrinfo failed
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\pkbcc\OneDrive\Desktop\internship\fyp\venv\Lib\site-packages\urllib3\connectionpool.py", line 787, in urlopen
+    response = self._make_request(
+               ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pkbcc\OneDrive\Desktop\internship\fyp\venv\Lib\site-packages\urllib3\connectionpool.py", line 488, in _make_request
+    raise new_e
+  File "C:\Users\pkbcc\OneDrive\Desktop\internship\fyp\venv\Lib\site-packages\urllib3\connectionpool.py", line 464, in _make_request
+    self._validate_conn(conn)
+  File "C:\Users\pkbcc\OneDrive\Desktop\internship\fyp\venv\Lib\site-packages\urllib3\connectionpool.py", line 1093, in _validate_conn
+    conn.connect()
+  File "C:\Users\pkbcc\OneDrive\Desktop\internship\fyp\venv\Lib\site-packages\urllib3\connection.py", line 759, in connect
+    self.sock = sock = self._new_conn()
+                       ^^^^^^^^^^^^^^^^
+  File "C:\Users\pkbcc\OneDrive\Desktop\internship\fyp\venv\Lib\site-packages\urllib3\connection.py", line 211, in _new_conn
+    raise NameResolutionError(self.host, self, e) from e
+urllib3.exceptions.NameResolutionError: HTTPSConnection(host='us.cloud.langfuse.com', port=443): Failed to resolve 'us.cloud.langfuse.com' ([Errno 11001] getaddrinfo failed)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\pkbcc\OneDrive\Desktop\internship\fyp\venv\Lib\site-packages\requests\adapters.py", line 644, in send
+    resp = conn.urlopen(
+           ^^^^^^^^^^^^^
+  File "C:\Users\pkbcc\OneDrive\Desktop\internship\fyp\venv\Lib\site-packages\urllib3\connectionpool.py", line 841, in urlopen
+    retries = retries.increment(
+              ^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pkbcc\OneDrive\Desktop\internship\fyp\venv\Lib\site-packages\urllib3\util\retry.py", line 535, in increment
+    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+urllib3.exceptions.MaxRetryError: HTTPSConnectionPool(host='us.cloud.langfuse.com', port=443): Max retries exceeded with url: /api/public/otel/v1/traces (Caused by NameResolutionError("HTTPSConnection(host='us.cloud.langfuse.com', port=443): Failed to resolve 'us.cloud.langfuse.com' ([Errno 11001] getaddrinfo failed)"))
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\pkbcc\OneDrive\Desktop\internship\fyp\venv\Lib\site-packages\opentelemetry\exporter\otlp\proto\http\trace_exporter\__init__.py", line 157, in _export
+    resp = self._session.post(
+           ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pkbcc\OneDrive\Desktop\internship\fyp\venv\Lib\site-packages\requests\sessions.py", line 637, in post
+    return self.request("POST", url, data=data, json=json, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pkbcc\OneDrive\Desktop\internship\fyp\venv\Lib\site-packages\requests\sessions.py", line 589, in request
+    resp = self.send(prep, **send_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pkbcc\OneDrive\Desktop\internship\fyp\venv\Lib\site-packages\requests\sessions.py", line 703, in send
+    r = adapter.send(request, **kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pkbcc\OneDrive\Desktop\internship\fyp\venv\Lib\site-packages\requests\adapters.py", line 677, in send
+    raise ConnectionError(e, request=request)
+requests.exceptions.ConnectionError: HTTPSConnectionPool(host='us.cloud.langfuse.com', port=443): Max retries exceeded with url: /api/public/otel/v1/traces (Caused by NameResolutionError("HTTPSConnection(host='us.cloud.langfuse.com', port=443): Failed to resolve 'us.cloud.langfuse.com' ([Errno 11001] getaddrinfo failed)"))
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\pkbcc\OneDrive\Desktop\internship\fyp\venv\Lib\site-packages\urllib3\connection.py", line 204, in _new_conn
+    sock = connection.create_connection(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pkbcc\OneDrive\Desktop\internship\fyp\venv\Lib\site-packages\urllib3\util\connection.py", line 60, in create_connection
+    for res in socket.getaddrinfo(host, port, family, socket.SOCK_STREAM):
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pkbcc\AppData\Local\Programs\Python\Python312\Lib\socket.py", line 963, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+socket.gaierror: [Errno 11001] getaddrinfo failed
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\pkbcc\OneDrive\Desktop\internship\fyp\venv\Lib\site-packages\urllib3\connectionpool.py", line 787, in urlopen
+    response = self._make_request(
+               ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pkbcc\OneDrive\Desktop\internship\fyp\venv\Lib\site-packages\urllib3\connectionpool.py", line 488, in _make_request
+    raise new_e
+  File "C:\Users\pkbcc\OneDrive\Desktop\internship\fyp\venv\Lib\site-packages\urllib3\connectionpool.py", line 464, in _make_request
+    self._validate_conn(conn)
+  File "C:\Users\pkbcc\OneDrive\Desktop\internship\fyp\venv\Lib\site-packages\urllib3\connectionpool.py", line 1093, in _validate_conn
+    conn.connect()
+  File "C:\Users\pkbcc\OneDrive\Desktop\internship\fyp\venv\Lib\site-packages\urllib3\connection.py", line 759, in connect
+    self.sock = sock = self._new_conn()
+                       ^^^^^^^^^^^^^^^^
+  File "C:\Users\pkbcc\OneDrive\Desktop\internship\fyp\venv\Lib\site-packages\urllib3\connection.py", line 211, in _new_conn
+    raise NameResolutionError(self.host, self, e) from e
+urllib3.exceptions.NameResolutionError: HTTPSConnection(host='us.cloud.langfuse.com', port=443): Failed to resolve 'us.cloud.langfuse.com' ([Errno 11001] getaddrinfo failed)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\pkbcc\OneDrive\Desktop\internship\fyp\venv\Lib\site-packages\requests\adapters.py", line 644, in send
+    resp = conn.urlopen(
+           ^^^^^^^^^^^^^
+  File "C:\Users\pkbcc\OneDrive\Desktop\internship\fyp\venv\Lib\site-packages\urllib3\connectionpool.py", line 841, in urlopen
+    retries = retries.increment(
+              ^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pkbcc\OneDrive\Desktop\internship\fyp\venv\Lib\site-packages\urllib3\util\retry.py", line 535, in increment
+    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+urllib3.exceptions.MaxRetryError: HTTPSConnectionPool(host='us.cloud.langfuse.com', port=443): Max retries exceeded with url: /api/public/otel/v1/traces (Caused by NameResolutionError("HTTPSConnection(host='us.cloud.langfuse.com', port=443): Failed to resolve 'us.cloud.langfuse.com' ([Errno 11001] getaddrinfo failed)"))
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\pkbcc\OneDrive\Desktop\internship\fyp\venv\Lib\site-packages\opentelemetry\sdk\_shared_internal\__init__.py", line 179, in _export
+    self._exporter.export(
+  File "C:\Users\pkbcc\OneDrive\Desktop\internship\fyp\venv\Lib\site-packages\opentelemetry\exporter\otlp\proto\http\trace_exporter\__init__.py", line 182, in export
+    resp = self._export(serialized_data, deadline_sec - time())
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pkbcc\OneDrive\Desktop\internship\fyp\venv\Lib\site-packages\opentelemetry\exporter\otlp\proto\http\trace_exporter\__init__.py", line 165, in _export
+    resp = self._session.post(
+           ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pkbcc\OneDrive\Desktop\internship\fyp\venv\Lib\site-packages\requests\sessions.py", line 637, in post
+    return self.request("POST", url, data=data, json=json, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pkbcc\OneDrive\Desktop\internship\fyp\venv\Lib\site-packages\requests\sessions.py", line 589, in request
+    resp = self.send(prep, **send_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pkbcc\OneDrive\Desktop\internship\fyp\venv\Lib\site-packages\requests\sessions.py", line 703, in send
+    r = adapter.send(request, **kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pkbcc\OneDrive\Desktop\internship\fyp\venv\Lib\site-packages\requests\adapters.py", line 677, in send
+    raise ConnectionError(e, request=request)
+requests.exceptions.ConnectionError: HTTPSConnectionPool(host='us.cloud.langfuse.com', port=443): Max retries exceeded with url: /api/public/otel/v1/traces (Caused by NameResolutionError("HTTPSConnection(host='us.cloud.langfuse.com', port=443): Failed to resolve 'us.cloud.langfuse.com' ([Errno 11001] getaddrinfo failed)"))
+2026-04-14 09:50:52  INFO      agents.llm_client               Calling google/gemma-4-31b-it... (retry 2)
+2026-04-14 09:54:07  INFO      agents.llm_client               Tokens: 9758 in → 1738 out
+2026-04-14 09:54:07  INFO      workflows.nodes                 Parsed 4 AI predictions: NVDA, AMD, AVGO, TSM
+2026-04-14 09:54:07  INFO      workflows.nodes                 Layer 1: Programmatic number check...
+2026-04-14 09:54:07  INFO      workflows.nodes                 Checked 21 claims: 7 verified, 6 discrepancies, 8 unchecked
+2026-04-14 09:54:07  INFO      workflows.nodes                 Layer 2: LLM reasoning check...
+2026-04-14 09:54:07  INFO      agents.llm_client               Calling google/gemma-4-31b-it...
+2026-04-14 09:54:54  INFO      agents.llm_client               Tokens: 4329 in → 587 out
+2026-04-14 09:54:54  INFO      workflows.nodes                 Combined: FAILED (6 numeric + 4 reasoning issues)
+2026-04-14 09:54:54  WARNING   workflows.nodes                 Validation still FAILED after 1 retries — scoring anyway
+2026-04-14 09:54:54  INFO      workflows.nodes                 Confidence: 7.8/10 — news=2.5 price=2.0 ta=1.0 filings=0.5 macro=0.8 diversity=1.0 validation=0.0 reasoning_dims=logical_consistency=4,citation_completeness=3,supply_chain_depth=5,prediction-evidence_alignment=2
+2026-04-14 09:54:55  INFO      workflows.nodes                 Stored analysis in vector DB (4 chunks)
+2026-04-14 09:54:55  INFO      workflows.nodes                 Report #63 saved to database
+2026-04-14 09:54:58  INFO      evals.scoring                   Pushed 8 eval scores to Langfuse trace 0714380d (overall=0.56)
+2026-04-14 09:54:58  INFO      workflows.weekly_analysis       Eval scores: overall=0.56
+2026-04-14 09:54:58  ERROR     evals.llm_judge                 LLM judge call failed: call_llm_fast() got an unexpected keyword argument 'temperature'
+2026-04-14 09:54:58  INFO      workflows.weekly_analysis       AI & Semiconductors — Report #63 saved
+2026-04-14 09:54:58  INFO      workflows.weekly_analysis         ⏱  fetch_news                    0.0s  [completed]
+2026-04-14 09:54:58  INFO      workflows.weekly_analysis         ⏱  fetch_prices                  0.0s  [completed]
+2026-04-14 09:54:58  INFO      workflows.weekly_analysis         ⏱  fetch_technicals              0.0s  [completed]
+2026-04-14 09:54:58  INFO      workflows.weekly_analysis         ⏱  fetch_filings                 0.0s  [completed]
+2026-04-14 09:54:58  INFO      workflows.weekly_analysis         ⏱  fetch_macro                   0.0s  [completed]
+2026-04-14 09:54:58  INFO      workflows.weekly_analysis         ⏱  ingest_vectordb               4.8s  [completed]
+2026-04-14 09:54:58  INFO      workflows.weekly_analysis         ⏱  summarize                    30.7s  [completed]
+2026-04-14 09:54:58  INFO      workflows.weekly_analysis         ⏱  reflect                       2.7s  [completed]
+2026-04-14 09:54:58  INFO      workflows.weekly_analysis         ⏱  rag_query                     3.3s  [completed]
+2026-04-14 09:54:58  INFO      workflows.weekly_analysis         ⏱  analyze                     317.4s  [completed]
+2026-04-14 09:54:58  INFO      workflows.weekly_analysis         ⏱  validate_numbers              0.0s  [completed]
+2026-04-14 09:54:58  INFO      workflows.weekly_analysis         ⏱  validate_reasoning          101.3s  [completed]
+2026-04-14 09:54:58  INFO      workflows.weekly_analysis         ⏱  rag_query                     3.5s  [completed]
+2026-04-14 09:54:58  INFO      workflows.weekly_analysis         ⏱  analyze                    1950.1s  [completed]
+2026-04-14 09:54:58  INFO      workflows.weekly_analysis         ⏱  validate_numbers              0.0s  [completed]
+2026-04-14 09:54:58  INFO      workflows.weekly_analysis         ⏱  validate_reasoning           46.7s  [completed]
+2026-04-14 09:54:58  INFO      workflows.weekly_analysis         ⏱  score                         0.0s  [completed]
+2026-04-14 09:54:58  INFO      workflows.weekly_analysis         ⏱  ingest_analysis               1.4s  [completed]
+2026-04-14 09:54:58  INFO      workflows.weekly_analysis         ⏱  save_to_db                    0.0s  [completed]
+2026-04-14 09:54:58  INFO      workflows.weekly_analysis         ──────────────────────────────────────────────
+2026-04-14 09:54:58  INFO      workflows.weekly_analysis         ⏱  SECTOR TOTAL               2551.9s
+2026-04-14 09:54:58  WARNING   agents.llm_client               Cancellation requested — aborting LLM calls

@@ -30,6 +30,8 @@ _DDL = [
         run_id      TEXT NOT NULL UNIQUE,
         ticker      TEXT NOT NULL,
         sector_id   TEXT NOT NULL,
+        agent_id    INTEGER,
+        agent_name  TEXT,
         status      TEXT NOT NULL DEFAULT 'pending',
         current_node TEXT,
         error       TEXT,
@@ -82,6 +84,39 @@ _DDL = [
         ai_reasoning       TEXT,
         ai_risk            TEXT,
         user_email         TEXT
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS chief_verdicts (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        ticker           TEXT NOT NULL,
+        run_id           TEXT,
+        user_email       TEXT,
+        action           TEXT NOT NULL,
+        conviction       INTEGER,
+        deciding_reason  TEXT,
+        summary          TEXT,
+        agreement        TEXT,
+        dissent          TEXT,
+        risk_assessment  TEXT,
+        analyst_count    INTEGER DEFAULT 0,
+        analyst_snapshot TEXT,
+        price_at_verdict REAL,
+        price_1w_later   REAL,
+        actual_change_1w REAL,
+        checked_at       TEXT,
+        verdict_correct  INTEGER,
+        created_at       TEXT NOT NULL
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS chief_strategist_memory (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_email  TEXT UNIQUE,
+        lessons     TEXT NOT NULL DEFAULT '',
+        sample_size INTEGER NOT NULL DEFAULT 0,
+        hit_rate    REAL,
+        updated_at  TEXT NOT NULL
     )
     """,
     """
@@ -145,7 +180,8 @@ _DDL = [
         description    TEXT,
         identity_layer TEXT,
         is_builtin     INTEGER NOT NULL DEFAULT 0,
-        created_at     TEXT NOT NULL
+        created_at     TEXT NOT NULL,
+        updated_at     TEXT
     )
     """,
     """
@@ -156,7 +192,8 @@ _DDL = [
         skill_type TEXT NOT NULL,
         content    TEXT NOT NULL,
         version    INTEGER NOT NULL DEFAULT 1,
-        created_at TEXT NOT NULL
+        created_at TEXT NOT NULL,
+        updated_at TEXT
     )
     """,
     """
@@ -166,8 +203,44 @@ _DDL = [
         username     TEXT,
         saved_sectors TEXT,
         preferences  TEXT,
+        role         TEXT NOT NULL DEFAULT 'user',
+        status       TEXT NOT NULL DEFAULT 'active',
+        picture      TEXT,
+        last_login_at TEXT,
         created_at   TEXT NOT NULL,
         updated_at   TEXT
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS user_sessions (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        token_hash   TEXT NOT NULL UNIQUE,
+        user_email   TEXT NOT NULL,
+        created_at   TEXT NOT NULL,
+        expires_at   TEXT NOT NULL,
+        last_seen_at TEXT,
+        user_agent   TEXT
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS auth_allowlist (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        email      TEXT NOT NULL UNIQUE,
+        role       TEXT NOT NULL DEFAULT 'user',
+        note       TEXT,
+        invited_by TEXT,
+        created_at TEXT NOT NULL
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS access_requests (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        email        TEXT NOT NULL UNIQUE,
+        name         TEXT,
+        status       TEXT NOT NULL DEFAULT 'pending',
+        requested_at TEXT NOT NULL,
+        decided_at   TEXT,
+        decided_by   TEXT
     )
     """,
 ]

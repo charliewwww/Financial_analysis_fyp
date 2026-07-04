@@ -148,6 +148,17 @@ class TestStricterThresholds:
         if len(discreps) >= 1 and len(verified) >= 1:
             assert result.status == "PASSED WITH WARNINGS"
 
+    def test_soft_fundamental_discrepancies_do_not_hard_fail(self):
+        analysis = (
+            "NVDA market cap is $4.5T. "
+            "NVDA margin is 99.0%."
+        )
+        prices = [{"ticker": "NVDA", "market_cap": 3.2e12, "profit_margin": 0.25}]
+        result = validate_numbers(analysis, prices, [])
+        assert result.discrepancy_count >= 1
+        assert result.hard_discrepancy_count == 0
+        assert result.status == "PASSED WITH WARNINGS"
+
 
 class TestContextWindowTickerMatching:
     """Test that ticker from nearby lines is propagated to claims."""
@@ -171,6 +182,16 @@ class TestContextWindowTickerMatching:
         result = validate_numbers(analysis, prices, [])
         nvda_checks = [c for c in result.checks if c.ticker == "NVDA"]
         assert len(nvda_checks) >= 1
+
+    def test_untracked_company_numbers_do_not_attach_to_focus_ticker(self):
+        analysis = (
+            "### NVIDIA (NVDA)\n"
+            "NVDA trades at $130.00.\n"
+            "TSMC reported revenue of $90.0B and margin of 60.0%.\n"
+        )
+        prices = [{"ticker": "NVDA", "price": 130.0, "market_cap": 3.2e12, "profit_margin": 0.55}]
+        result = validate_numbers(analysis, prices, [])
+        assert not any(c.ticker == "NVDA" and c.claimed_value == 90.0e9 for c in result.checks)
 
     def test_rsi_claim_checked(self):
         """RSI claims should be verified against technical data."""

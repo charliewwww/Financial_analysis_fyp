@@ -22,6 +22,7 @@ DATA STRUCTURE PER COMPANY:
 AI_SEMICONDUCTORS = {
     "sector_name": "AI & Semiconductors",
     "sector_id": "ai_semiconductors",
+    "market": "us",
     "description": "The AI compute supply chain: chips → servers → data centers → energy → end users",
     "chain_layers": [
         {"name": "Raw Materials & IP", "color": "#B0BEC5"},
@@ -282,6 +283,7 @@ AI_SEMICONDUCTORS = {
 SPACE_ROCKETS = {
     "sector_name": "Space & Rocket Technology",
     "sector_id": "space_rockets",
+    "market": "us",
     "description": "Launch vehicles → satellites → ground infrastructure → space services",
     "chain_layers": [
         {"name": "Components & Propulsion", "color": "#B0BEC5"},
@@ -457,6 +459,7 @@ SPACE_ROCKETS = {
 OPTICAL_COMMUNICATIONS = {
     "sector_name": "Optical & Light Communication",
     "sector_id": "optical_communications",
+    "market": "us",
     "description": "Fiber optics → transceivers → network equipment → data center interconnects",
     "chain_layers": [
         {"name": "Test & Measurement", "color": "#B0BEC5"},

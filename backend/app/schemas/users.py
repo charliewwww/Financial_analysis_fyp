@@ -22,6 +22,13 @@ class UserDetailSchema(BaseModel):
     username: str | None = None
     saved_sectors: list[str] = Field(default_factory=list)
     preferences: dict[str, Any] = Field(default_factory=dict)
+    # Authorization role: "user" or "admin" (enforced server-side).
+    role: str = "user"
+    # Account status: "active" or "suspended".
+    status: str = "active"
+    # Avatar URL from the identity provider (Google), if any.
+    picture: str | None = None
+    last_login_at: str | None = None
     created_at: str
     updated_at: str | None = None
 

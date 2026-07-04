@@ -173,7 +173,13 @@ def _get_compiled_graph():
 def run_sector_analysis(
     sector_id: str,
     sector: dict,
+    agent_id: int | None = None,
+    agent_name: str = "",
+    agent_identity: str = "",
     progress_fn: Callable | None = None,
+    max_fetch_retries: int = 1,
+    max_validation_retries: int = 1,
+    model_override: str = "",
 ) -> dict:
     """
     Run the full LangGraph pipeline for ONE sector.
@@ -181,6 +187,9 @@ def run_sector_analysis(
     Args:
         sector_id: Key in SECTORS dict
         sector: The sector config dict
+        agent_id: Optional Alpha Lens agent id for FastAPI-triggered runs
+        agent_name: Optional human-readable agent name
+        agent_identity: Optional system prompt override for the analysis node
         progress_fn: Optional callback(event_type, message) for live UI updates
 
     Returns:
@@ -191,7 +200,17 @@ def run_sector_analysis(
     logger.info("%s", "─" * 50)
 
     try:
-        state = _run_sector_graph(sector_id, sector, progress_fn=progress_fn)
+        state = _run_sector_graph(
+            sector_id,
+            sector,
+            agent_id=agent_id,
+            agent_name=agent_name,
+            agent_identity=agent_identity,
+            progress_fn=progress_fn,
+            max_fetch_retries=max_fetch_retries,
+            max_validation_retries=max_validation_retries,
+            model_override=model_override,
+        )
         result = _state_to_result(state)
 
         # Log node timing
@@ -372,7 +391,13 @@ def run_weekly_analysis(
 def _run_sector_graph(
     sector_id: str,
     sector: dict,
+    agent_id: int | None = None,
+    agent_name: str = "",
+    agent_identity: str = "",
     progress_fn: Callable | None = None,
+    max_fetch_retries: int = 1,
+    max_validation_retries: int = 1,
+    model_override: str = "",
 ) -> PipelineState:
     """
     Execute the LangGraph pipeline for a single sector.
@@ -384,7 +409,14 @@ def _run_sector_graph(
 
     # ── Initialize state ──────────────────────────────────────────
     state = PipelineState.from_sector(sector_id, sector)
+    state.agent_id = agent_id
+    if agent_name:
+        state.agent_name = agent_name
+    state.agent_identity = agent_identity
+    state.model_override = model_override or ""
     state.pipeline_status = "running"
+    state.max_fetch_retries = max_fetch_retries
+    state.max_validation_retries = max_validation_retries
 
     # ── Create a single Langfuse trace for the entire sector run ──
     # All LLM calls and RAG spans will be grouped under this trace,
@@ -406,7 +438,11 @@ def _run_sector_graph(
                 trace_context={"trace_id": trace_id},
                 name=f"pipeline — {sector['name']}",
                 input={"sector_id": sector_id, "tickers": sector.get("tickers", [])},
-                metadata={"sector_id": sector_id},
+                metadata={
+                    "sector_id": sector_id,
+                    "agent_id": state.agent_id,
+                    "agent_name": state.agent_name,
+                },
                 end_on_exit=False,  # we'll end it manually after state update
             )
             lf_root_span.__enter__()
@@ -421,6 +457,8 @@ def _run_sector_graph(
                 metadata={
                     "sector_name": sector["name"],
                     "tickers": sector.get("tickers", []),
+                    "agent_id": state.agent_id,
+                    "agent_name": state.agent_name,
                 },
             )
             logger.info("Langfuse trace created: %s", trace_id)

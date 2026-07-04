@@ -13,6 +13,11 @@ Usage in a route:
         return {"email": user}
 """
 
-from app.core.auth import CurrentUser, get_current_user  # noqa: F401
+from app.core.auth import (  # noqa: F401
+    AdminUser,
+    CurrentUser,
+    get_current_user,
+    require_admin,
+)
 
-__all__ = ["CurrentUser", "get_current_user"]
+__all__ = ["AdminUser", "CurrentUser", "get_current_user", "require_admin"]

@@ -117,6 +117,58 @@ def get_default_dataset() -> list[EvalCase]:
             ),
             tags=["minimal", "completeness"],
         ),
+        # ── Adversarial / failure-mode cases ─────────────────────
+        # These do NOT test the golden path. They check that the pipeline
+        # degrades HONESTLY under stress: no crash, no fabricated numbers,
+        # and — critically — no overconfidence when the data isn't there.
+        EvalCase(
+            case_id="eval_adversarial_unknown_ticker",
+            sector_id="ai_semiconductors",
+            sector_config={
+                "name": "Nonexistent Instrument",
+                "description": "A ticker that does not correspond to any real, tradeable security.",
+                "tickers": ["ZZZZ"],
+                "keywords": ["zzzz"],
+                "supply_chain_map": {},
+            },
+            expectations=EvalExpectation(
+                # With no real price/news data, a trustworthy system must stay
+                # UNcertain. A high confidence score here is a hallucination.
+                min_confidence=0.0,
+                max_confidence=6.0,
+                required_sections=["THESIS", "RISK"],
+                min_predictions=0,
+                must_pass_validation=False,
+                must_have_sources=False,
+                min_articles=0,
+                description="Unknown ticker — must complete without crashing and must NOT be overconfident on missing data",
+            ),
+            tags=["adversarial", "no-data", "overconfidence"],
+        ),
+        EvalCase(
+            case_id="eval_adversarial_thin_obscure_sector",
+            sector_id="ai_semiconductors",
+            sector_config={
+                "name": "Thinly-covered niche",
+                "description": "An obscure theme with very little news flow or analyst coverage.",
+                "tickers": ["NVDA"],
+                # Deliberately mismatched keywords so the news filter returns
+                # little/nothing relevant — exercises the low-data path.
+                "keywords": ["obscure", "niche", "thinly covered"],
+                "supply_chain_map": {},
+            },
+            expectations=EvalExpectation(
+                min_confidence=0.0,
+                max_confidence=7.0,
+                required_sections=["THESIS", "RISK"],
+                min_predictions=0,
+                must_pass_validation=False,
+                must_have_sources=False,
+                min_articles=0,
+                description="Thin coverage — must report honestly and avoid manufacturing confidence it cannot support",
+            ),
+            tags=["adversarial", "low-data", "honesty"],
+        ),
     ]
 
 

@@ -32,8 +32,8 @@ if LLM_PROVIDER == "ollama":
 else:
     LLM_BASE_URL = OPENROUTER_BASE_URL
     LLM_API_KEY = OPENROUTER_API_KEY
-    REASONING_MODEL = os.getenv("REASONING_MODEL", "google/gemma-4-31b-it")
-    FAST_MODEL = os.getenv("FAST_MODEL", "google/gemma-4-31b-it")
+    REASONING_MODEL = os.getenv("REASONING_MODEL", "deepseek/deepseek-v4-flash")
+    FAST_MODEL = os.getenv("FAST_MODEL", "deepseek/deepseek-v4-flash")
 
 # ── FRED (Federal Reserve Economic Data) ──────────────────────────
 # Free API key from https://fred.stlouisfed.org/docs/api/api_key.html
@@ -58,6 +58,8 @@ NUMERICAL_TOLERANCE_PCT = 5.0  # Tightened: 5% catches real errors while allowin
 # Exponential backoff for transient API errors (rate-limit, timeout, 5xx)
 LLM_MAX_RETRIES = int(os.getenv("LLM_MAX_RETRIES", "3"))
 LLM_RETRY_BASE_DELAY = float(os.getenv("LLM_RETRY_BASE_DELAY", "2.0"))  # seconds
+_DEFAULT_LLM_MAX_CONCURRENCY = "1" if LLM_PROVIDER == "ollama" else "3"
+LLM_MAX_CONCURRENCY = max(1, int(os.getenv("LLM_MAX_CONCURRENCY", _DEFAULT_LLM_MAX_CONCURRENCY)))
 
 # Confidence score range
 CONFIDENCE_MIN = 1

@@ -241,7 +241,7 @@ def render():
             'border-radius:1.5rem;padding:2rem 2.5rem;margin-bottom:1.5rem">'
             '<h3 style="font-family:Manrope,sans-serif;font-weight:800;'
             'letter-spacing:-0.02em;margin:0 0 0.5rem 0;color:var(--on-surface)">'
-            'Welcome to Alpha Lens</h3>'
+            'Welcome to MarketPulse</h3>'
             '<p style="color:var(--on-surface-variant);font-size:0.9rem;line-height:1.7;margin:0">'
             'Your AI-powered finance intelligence platform. It analyses stocks across '
             '<strong>3 sectors</strong> using multi-agent reasoning — pulling live news, '

@@ -55,6 +55,8 @@ pipeline_runs = Table(
     Column("run_id", Text, nullable=False, unique=True),   # UUID string
     Column("ticker", Text, nullable=False),
     Column("sector_id", Text, nullable=False),
+    Column("agent_id", BigInteger),
+    Column("agent_name", Text),
     # pending | running | completed | failed
     Column("status", Text, nullable=False, server_default="pending"),
     # Name of the node currently executing (null when not running)
@@ -73,6 +75,7 @@ pipeline_runs = Table(
 
     Index("ix_pipeline_runs_run_id", "run_id"),
     Index("ix_pipeline_runs_ticker", "ticker"),
+    Index("ix_pipeline_runs_agent_id", "agent_id"),
     Index("ix_pipeline_runs_status", "status"),
     Index("ix_pipeline_runs_user_email", "user_email"),
 )
@@ -180,6 +183,75 @@ predictions = Table(
         "id",
         postgresql_where=text("price_1w_later IS NULL"),
     ),
+)
+
+
+# ── chief_verdicts ────────────────────────────────────────────────
+# The Chief Strategist's single house call across all analysts for a ticker,
+# auto-generated after a board run completes. Persisted so the prediction page
+# can track the DESK's own directional accuracy (separate from each analyst).
+
+chief_verdicts = Table(
+    "chief_verdicts",
+    metadata,
+    Column("id", BigInteger, primary_key=True, autoincrement=True),
+    Column("ticker", Text, nullable=False),
+    # The run that tipped the batch over the line (last analyst to finish).
+    Column("run_id", Text),
+    Column("user_email", Text),
+
+    # ── The verdict ───────────────────────────────────────────────
+    Column("action", Text, nullable=False),       # BUY | SELL | HOLD
+    Column("conviction", Integer),                # 1–5
+    Column("deciding_reason", Text),
+    Column("summary", Text),
+    Column("agreement", Text),                     # aligned | mixed | split
+    Column("dissent", Text),
+    # The Chief Strategist's own probability-weighted risk judgement — the
+    # "final gate" reasoning that discounts low-likelihood tail risks.
+    Column("risk_assessment", Text),
+    Column("analyst_count", Integer, server_default="0"),
+    # Snapshot of the analyst views weighed: [{agent_name, signal, conviction}]
+    Column("analyst_snapshot", JSONB),
+
+    # ── Accountability loop (filled by the weekly accuracy job) ───
+    Column("price_at_verdict", Float),
+    Column("price_1w_later", Float),
+    Column("actual_change_1w", Float),
+    Column("checked_at", TIMESTAMP(timezone=True)),
+    Column("verdict_correct", Boolean),
+
+    Column("created_at", TIMESTAMP(timezone=True), nullable=False),
+
+    Index("ix_chief_verdicts_ticker", "ticker"),
+    Index("ix_chief_verdicts_user_email", "user_email"),
+    Index("ix_chief_verdicts_created_at", "created_at"),
+    Index(
+        "ix_chief_verdicts_unchecked",
+        "id",
+        postgresql_where=text("price_1w_later IS NULL"),
+    ),
+)
+
+
+# ── chief_strategist_memory ───────────────────────────────────────
+# The self-refining "lessons" addendum. After the weekly resolver scores the
+# Chief Strategist's past verdicts, an LLM distils recent hits/misses into
+# calibration notes stored here and prepended to the strategist's prompt.
+# Keyed by user_email; a NULL-email row is the shared house default.
+
+chief_strategist_memory = Table(
+    "chief_strategist_memory",
+    metadata,
+    Column("id", BigInteger, primary_key=True, autoincrement=True),
+    Column("user_email", Text),
+    Column("lessons", Text, nullable=False, server_default=""),
+    Column("sample_size", Integer, nullable=False, server_default="0"),
+    Column("hit_rate", Float),
+    Column("updated_at", TIMESTAMP(timezone=True), nullable=False),
+
+    UniqueConstraint("user_email", name="uq_chief_memory_user"),
+    Index("ix_chief_memory_user_email", "user_email"),
 )
 
 
@@ -313,6 +385,7 @@ agents = Table(
     Column("created_at", TIMESTAMP(timezone=True), nullable=False),
     Column("updated_at", TIMESTAMP(timezone=True)),
 
+    UniqueConstraint("name", name="uq_agents_name"),
     Index("ix_agents_name", "name"),
 )
 
@@ -359,7 +432,7 @@ user_details = Table(
     "user_details",
     metadata,
     Column("id", BigInteger, primary_key=True, autoincrement=True),
-    # Primary identity — the email injected by Cloudflare Access.
+    # Primary identity — the verified email from the Google OIDC sign-in.
     Column("email", Text, nullable=False, unique=True),
     # Optional display name the user sets in the Profile page.
     Column("username", Text),
@@ -369,10 +442,87 @@ user_details = Table(
     # UI / notification preferences as a freeform JSONB object.
     # Example: {"email_digest": true, "default_page_size": 20}
     Column("preferences", JSONB),
+    # Authorization role: 'user' (default) or 'admin'. Enforced server-side.
+    Column("role", Text, nullable=False, server_default="user"),
+    # Account status: 'active' (default) or 'suspended' (access revoked).
+    Column("status", Text, nullable=False, server_default="active"),
+    # Avatar URL provided by the identity provider (Google), optional.
+    Column("picture", Text),
+    # Timestamp of the most recent successful sign-in.
+    Column("last_login_at", TIMESTAMP(timezone=True)),
     Column("created_at", TIMESTAMP(timezone=True), nullable=False),
     Column("updated_at", TIMESTAMP(timezone=True)),
 
     Index("ix_user_details_email", "email", unique=True),
+)
+
+
+# ══════════════════════════════════════════════════════════════════
+# AUTHENTICATION TABLES  (self-hosted Google OIDC sign-in)
+# ══════════════════════════════════════════════════════════════════
+
+# ── user_sessions ─────────────────────────────────────────────────
+# One row per active sign-in session. The browser holds an opaque random
+# token in an HttpOnly cookie; we store only its SHA-256 hash here so a DB
+# leak never exposes usable session tokens. Logout deletes the row;
+# "sign out everywhere" deletes all rows for a user.
+
+user_sessions = Table(
+    "user_sessions",
+    metadata,
+    Column("id", BigInteger, primary_key=True, autoincrement=True),
+    # SHA-256 hex digest of the raw session token (never store the raw token).
+    Column("token_hash", Text, nullable=False, unique=True),
+    Column("user_email", Text, nullable=False),
+    Column("created_at", TIMESTAMP(timezone=True), nullable=False),
+    Column("expires_at", TIMESTAMP(timezone=True), nullable=False),
+    Column("last_seen_at", TIMESTAMP(timezone=True)),
+    # Best-effort device label for an "active sessions" UI.
+    Column("user_agent", Text),
+
+    Index("ix_user_sessions_token_hash", "token_hash", unique=True),
+    Index("ix_user_sessions_user_email", "user_email"),
+)
+
+
+# ── auth_allowlist ────────────────────────────────────────────────
+# The private-beta invite list. A Google sign-in is only accepted if the
+# email appears here (or is a configured bootstrap admin). Admins manage
+# this list; `role` lets an invite pre-assign admin rights.
+
+auth_allowlist = Table(
+    "auth_allowlist",
+    metadata,
+    Column("id", BigInteger, primary_key=True, autoincrement=True),
+    Column("email", Text, nullable=False, unique=True),
+    Column("role", Text, nullable=False, server_default="user"),
+    Column("note", Text),
+    Column("invited_by", Text),
+    Column("created_at", TIMESTAMP(timezone=True), nullable=False),
+
+    Index("ix_auth_allowlist_email", "email", unique=True),
+)
+
+
+# ── access_requests ───────────────────────────────────────────────
+# The waitlist. When a not-yet-invited user signs in with Google we record
+# their request here so an admin can approve them (which moves the email to
+# auth_allowlist).
+
+access_requests = Table(
+    "access_requests",
+    metadata,
+    Column("id", BigInteger, primary_key=True, autoincrement=True),
+    Column("email", Text, nullable=False, unique=True),
+    Column("name", Text),
+    # pending | approved | denied
+    Column("status", Text, nullable=False, server_default="pending"),
+    Column("requested_at", TIMESTAMP(timezone=True), nullable=False),
+    Column("decided_at", TIMESTAMP(timezone=True)),
+    Column("decided_by", Text),
+
+    Index("ix_access_requests_email", "email", unique=True),
+    Index("ix_access_requests_status", "status"),
 )
 
 
@@ -400,6 +550,8 @@ async def create_all_tables(engine) -> None:
                 run_id          TEXT NOT NULL UNIQUE,
                 ticker          TEXT NOT NULL,
                 sector_id       TEXT NOT NULL,
+                agent_id        INTEGER,
+                agent_name      TEXT,
                 status          TEXT NOT NULL DEFAULT 'pending',
                 current_node    TEXT,
                 error           TEXT,
@@ -448,6 +600,35 @@ async def create_all_tables(engine) -> None:
                 ai_reasoning        TEXT,
                 ai_risk             TEXT,
                 user_email          TEXT
+            )""",
+            """CREATE TABLE IF NOT EXISTS chief_verdicts (
+                id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                ticker           TEXT NOT NULL,
+                run_id           TEXT,
+                user_email       TEXT,
+                action           TEXT NOT NULL,
+                conviction       INTEGER,
+                deciding_reason  TEXT,
+                summary          TEXT,
+                agreement        TEXT,
+                dissent          TEXT,
+                risk_assessment  TEXT,
+                analyst_count    INTEGER DEFAULT 0,
+                analyst_snapshot TEXT,
+                price_at_verdict REAL,
+                price_1w_later   REAL,
+                actual_change_1w REAL,
+                checked_at       TEXT,
+                verdict_correct  INTEGER,
+                created_at       TEXT NOT NULL
+            )""",
+            """CREATE TABLE IF NOT EXISTS chief_strategist_memory (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_email  TEXT UNIQUE,
+                lessons     TEXT NOT NULL DEFAULT '',
+                sample_size INTEGER NOT NULL DEFAULT 0,
+                hit_rate    REAL,
+                updated_at  TEXT NOT NULL
             )""",
             """CREATE TABLE IF NOT EXISTS reports (
                 id                  INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -523,13 +704,64 @@ async def create_all_tables(engine) -> None:
                 username      TEXT,
                 saved_sectors TEXT,
                 preferences   TEXT,
+                role          TEXT NOT NULL DEFAULT 'user',
+                status        TEXT NOT NULL DEFAULT 'active',
+                picture       TEXT,
+                last_login_at TEXT,
                 created_at    TEXT NOT NULL,
                 updated_at    TEXT
+            )""",
+            """CREATE TABLE IF NOT EXISTS user_sessions (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                token_hash   TEXT NOT NULL UNIQUE,
+                user_email   TEXT NOT NULL,
+                created_at   TEXT NOT NULL,
+                expires_at   TEXT NOT NULL,
+                last_seen_at TEXT,
+                user_agent   TEXT
+            )""",
+            """CREATE TABLE IF NOT EXISTS auth_allowlist (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                email      TEXT NOT NULL UNIQUE,
+                role       TEXT NOT NULL DEFAULT 'user',
+                note       TEXT,
+                invited_by TEXT,
+                created_at TEXT NOT NULL
+            )""",
+            """CREATE TABLE IF NOT EXISTS access_requests (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                email        TEXT NOT NULL UNIQUE,
+                name         TEXT,
+                status       TEXT NOT NULL DEFAULT 'pending',
+                requested_at TEXT NOT NULL,
+                decided_at   TEXT,
+                decided_by   TEXT
             )""",
         ]
         async with engine.begin() as conn:
             for ddl in _SQLITE_DDL:
                 await conn.execute(text(ddl))
+            existing = {
+                row[1]
+                for row in (await conn.execute(text("PRAGMA table_info(pipeline_runs)"))).all()
+            }
+            if "agent_id" not in existing:
+                await conn.execute(text("ALTER TABLE pipeline_runs ADD COLUMN agent_id INTEGER"))
+            if "agent_name" not in existing:
+                await conn.execute(text("ALTER TABLE pipeline_runs ADD COLUMN agent_name TEXT"))
+            # Idempotent column adds for user_details (existing local dev DBs).
+            ud_cols = {
+                row[1]
+                for row in (await conn.execute(text("PRAGMA table_info(user_details)"))).all()
+            }
+            if "role" not in ud_cols:
+                await conn.execute(text("ALTER TABLE user_details ADD COLUMN role TEXT NOT NULL DEFAULT 'user'"))
+            if "status" not in ud_cols:
+                await conn.execute(text("ALTER TABLE user_details ADD COLUMN status TEXT NOT NULL DEFAULT 'active'"))
+            if "picture" not in ud_cols:
+                await conn.execute(text("ALTER TABLE user_details ADD COLUMN picture TEXT"))
+            if "last_login_at" not in ud_cols:
+                await conn.execute(text("ALTER TABLE user_details ADD COLUMN last_login_at TEXT"))
     else:
         async with engine.begin() as conn:
             await conn.run_sync(metadata.create_all, checkfirst=True)

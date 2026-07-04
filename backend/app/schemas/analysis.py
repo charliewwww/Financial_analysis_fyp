@@ -111,6 +111,8 @@ class PipelineStateSchema(BaseModel):
     sector_id: str
     sector_name: str
     sector_tickers: list[str] = Field(default_factory=list)
+    agent_id: int | None = None
+    agent_name: str = "Supply Chain Analyst"
     created_at: str = ""
     pipeline_status: Literal["pending", "running", "completed", "failed"] = "pending"
 
@@ -178,6 +180,7 @@ class SignalSourceSchema(BaseModel):
     url: str
     title: str = ""
     domain: str = ""   # e.g. "reuters.com" — derived from url by the pipeline
+    summary: str = ""
 
 
 class SignalCardSchema(BaseModel):
@@ -209,6 +212,10 @@ class SignalCardSchema(BaseModel):
     key_risk: str = ""              # top bearish risk
     confidence: float = Field(ge=0.0, le=1.0)
 
+    # True when the model explicitly stated a conviction; False when the
+    # value is the pipeline's default-3 fallback (UI shows "not stated").
+    conviction_stated: bool = True
+
     # ── Signal classification (Phase 2 — field present from Phase 1) ─
     # FUNDAMENTAL_SHIFT | MEDIA_NARRATIVE | TECHNICAL_ONLY
     signal_type: str | None = None
@@ -219,6 +226,123 @@ class SignalCardSchema(BaseModel):
     sources: list[SignalSourceSchema] = Field(default_factory=list)
     supply_chain_impact: list[SupplyChainImpactSchema] = Field(default_factory=list)
 
+    # ── Rich evidence detail (derived from raw_pipeline_state when present) ──
+    analysis_text: str = ""
+    news_summary: str = ""
+    data_sufficiency: str = ""
+    sufficiency_reasoning: str = ""
+    anomaly_alerts: list[dict[str, Any]] = Field(default_factory=list)
+    article_evidence: list[dict[str, Any]] = Field(default_factory=list)
+    price_snapshot: list[dict[str, Any]] = Field(default_factory=list)
+    technical_snapshot: list[dict[str, Any]] = Field(default_factory=list)
+    reasoning_scores: dict[str, Any] = Field(default_factory=dict)
+    confidence_breakdown: dict[str, Any] = Field(default_factory=dict)
+    rag_metadata: dict[str, Any] = Field(default_factory=dict)
+
     # ── Metadata ──────────────────────────────────────────────────
     created_at: str = ""
     status: str = "active"
+
+
+# ══════════════════════════════════════════════════════════════════
+# Signal Evidence Chat
+# ══════════════════════════════════════════════════════════════════
+
+class SignalChatTurn(BaseModel):
+    """A compact prior chat turn sent back to the evidence chat endpoint."""
+
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1, max_length=2000)
+
+
+class SignalChatRequest(BaseModel):
+    """Question payload for the evidence-scoped chat endpoint."""
+
+    question: str = Field(min_length=3, max_length=1000)
+    history: list[SignalChatTurn] = Field(default_factory=list, max_length=8)
+    context: str | None = Field(default=None, max_length=4000)
+
+
+class SignalChatCitation(BaseModel):
+    """A source, claim, or system evidence item cited by a chat answer."""
+
+    label: str
+    source_type: Literal["source", "claim", "supply_chain", "snapshot", "analysis", "decision"] = "analysis"
+    source: str = ""
+    url: str | None = None
+    quote: str = ""
+
+
+class SignalChatResponse(BaseModel):
+    """Grounded answer returned by the evidence chat endpoint."""
+
+    answer: str
+    citations: list[SignalChatCitation] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
+    grounded: bool = True
+    suggested_questions: list[str] = Field(default_factory=list)
+
+
+# ══════════════════════════════════════════════════════════════════
+# Chief Strategist — per-ticker meta-verdict over all analysts
+# ══════════════════════════════════════════════════════════════════
+
+class ChiefVerdictAnalystView(BaseModel):
+    """One analyst's input that the Chief Strategist weighed."""
+
+    agent_id: int | None = None
+    agent_name: str
+    signal: str
+    conviction: int
+    one_line: str = ""
+
+
+class ChiefVerdictResponse(BaseModel):
+    """The Chief Strategist's single house call across all analysts for a ticker."""
+
+    ticker: str
+    action: Literal["BUY", "SELL", "HOLD"]
+    conviction: int = Field(ge=1, le=5)
+    deciding_reason: str = ""
+    summary: str = ""
+    agreement: Literal["aligned", "mixed", "split"] = "mixed"
+    dissent: str = ""
+    risk_assessment: str = ""
+    analysts: list[ChiefVerdictAnalystView] = Field(default_factory=list)
+    generated_at: str = ""
+
+
+class ChiefVerdictRecord(BaseModel):
+    """A persisted Chief Strategist verdict with its accountability outcome."""
+
+    id: int
+    ticker: str
+    run_id: str | None = None
+    action: str
+    conviction: int | None = None
+    deciding_reason: str = ""
+    summary: str = ""
+    agreement: str = ""
+    dissent: str = ""
+    risk_assessment: str = ""
+    analyst_count: int = 0
+    price_at_verdict: float | None = None
+    price_1w_later: float | None = None
+    actual_change_1w: float | None = None
+    checked_at: str | None = None
+    verdict_correct: bool | None = None
+    created_at: str = ""
+
+
+class ChiefVerdictAccuracy(BaseModel):
+    """Aggregate track record for the Chief Strategist's house calls."""
+
+    total: int = 0
+    checked: int = 0
+    correct: int = 0
+    hit_rate: float | None = None
+    buy_calls: int = 0
+    sell_calls: int = 0
+    hold_calls: int = 0
+    recent: list[ChiefVerdictRecord] = Field(default_factory=list)
+

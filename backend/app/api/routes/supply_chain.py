@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 from app.pipeline import runner as _runner  # noqa: F401 — ensures sys.path patch
 
@@ -17,14 +17,19 @@ router = APIRouter(tags=["supply-chain"])
     "/supply-chain",
     summary="List sectors that have curated supply chain data",
 )
-async def list_supply_chain_sectors() -> list[dict]:
+async def list_supply_chain_sectors(
+    market: str | None = Query(default=None, description="us | hk"),
+) -> list[dict]:
+    wanted = market.strip().lower() if market else None
     return [
         {
             "id": sid,
             "name": data.get("sector_name", sid),
             "description": data.get("description", ""),
+            "market": data.get("market", "us"),
         }
         for sid, data in SUPPLY_CHAIN_DATA.items()
+        if wanted is None or data.get("market", "us") == wanted
     ]
 
 

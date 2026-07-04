@@ -24,6 +24,15 @@ from dataclasses import dataclass, field
 from config.settings import NUMERICAL_TOLERANCE_PCT
 
 
+HARD_FAILURE_CLAIM_TYPES = {
+    "price",
+    "change_1w_pct",
+    "change_1m_pct",
+    "rsi",
+    "macd",
+}
+
+
 # ── Data structures ───────────────────────────────────────────────
 
 @dataclass
@@ -41,6 +50,10 @@ class ClaimCheck:
     @property
     def is_error(self) -> bool:
         return self.status == "DISCREPANCY"
+
+    @property
+    def is_hard_error(self) -> bool:
+        return self.is_error and self.claim_type in HARD_FAILURE_CLAIM_TYPES
 
 
 @dataclass
@@ -61,6 +74,10 @@ class ValidationResult:
     @property
     def unchecked_count(self) -> int:
         return sum(1 for c in self.checks if c.status == "UNCHECKED")
+
+    @property
+    def hard_discrepancy_count(self) -> int:
+        return sum(1 for c in self.checks if c.is_hard_error)
 
     def to_markdown(self) -> str:
         """Format as Markdown for display in the UI."""
@@ -143,22 +160,33 @@ def validate_numbers(
     # Determine overall status
     result = ValidationResult(checks=claims)
     total_checkable = result.verified_count + result.discrepancy_count
-    discrepancy_ratio = (
-        result.discrepancy_count / total_checkable if total_checkable > 0 else 0.0
+    hard_checkable = [
+        c for c in result.checks
+        if c.claim_type in HARD_FAILURE_CLAIM_TYPES
+        and c.status in ("VERIFIED", "DISCREPANCY")
+    ]
+    hard_discrepancy_ratio = (
+        result.hard_discrepancy_count / len(hard_checkable)
+        if hard_checkable else 0.0
     )
     if result.discrepancy_count == 0 and result.verified_count > 0:
         result.status = "PASSED"
         result.summary = f"All {result.verified_count} checkable claims verified within {tolerance_pct}% tolerance."
-    elif discrepancy_ratio > 0.5:
-        # More than half the checkable claims are off — genuine concern
+    elif result.hard_discrepancy_count and (
+        result.hard_discrepancy_count >= 2 or hard_discrepancy_ratio > 0.5
+    ):
+        # Direct market data is objectively wrong — genuine concern.
         result.status = "FAILED"
-        result.summary = (f"{result.discrepancy_count}/{total_checkable} numerical claims "
-                          f"deviate beyond {tolerance_pct}% tolerance.")
+        result.summary = (
+            f"{result.hard_discrepancy_count}/{len(hard_checkable)} direct market-data claims "
+            f"deviate beyond {tolerance_pct}% tolerance. "
+            f"{result.discrepancy_count} total discrepancies found."
+        )
     elif result.discrepancy_count > 0:
         result.status = "PASSED WITH WARNINGS"
         result.summary = (f"{result.discrepancy_count} of {total_checkable} claims deviate "
                           f"more than {tolerance_pct}% from real data. "
-                          f"Minor drift is normal for live prices.")
+                          f"Publishing with warnings because direct market data did not fail hard.")
     elif result.unchecked_count > 0 and total_checkable == 0:
         # All claims are unchecked — can't verify, but that's not a warning
         result.status = "PASSED"
@@ -219,9 +247,6 @@ def _extract_numerical_claims(text: str, known_tickers: set[str]) -> list[ClaimC
     claims = []
     lines = text.split("\n")
 
-    # Pre-compute a "last mentioned ticker" that carries across lines
-    last_ticker_seen: str | None = None
-
     for line_idx, line in enumerate(lines):
         # Build a context window of ±3 lines for ticker matching
         context_start = max(0, line_idx - 3)
@@ -230,15 +255,11 @@ def _extract_numerical_claims(text: str, known_tickers: set[str]) -> list[ClaimC
 
         # Find the nearest ticker mention in this line or context window
         line_ticker = _find_ticker_in_context(line, known_tickers)
+        if line_ticker is None and _mentions_untracked_company_or_ticker(line, known_tickers):
+            continue
         if line_ticker is None:
             # Try the context window (nearby lines)
             line_ticker = _find_ticker_in_context(context_window, known_tickers)
-        if line_ticker is None:
-            # Fall back to the last ticker mentioned in the document
-            line_ticker = last_ticker_seen
-        else:
-            # Update the last-seen ticker
-            last_ticker_seen = line_ticker
 
         for pattern, claim_type in _PATTERNS:
             for match in re.finditer(pattern, line, re.IGNORECASE):
@@ -334,6 +355,20 @@ def _find_ticker_in_context(line: str, known_tickers: set[str]) -> str | None:
                 return ticker
 
     return None
+
+
+def _mentions_untracked_company_or_ticker(line: str, known_tickers: set[str]) -> bool:
+    """Avoid assigning another company's numbers to the focus ticker."""
+    line_upper = line.upper()
+    for ticker, names in _TICKER_COMPANY_NAMES.items():
+        if ticker in known_tickers:
+            continue
+        if re.search(rf'\b{ticker}\b|\${ticker}\b|\({ticker}\)', line, re.IGNORECASE):
+            return True
+        for name in names:
+            if name.upper() in line_upper:
+                return True
+    return False
 
 
 # Common company name → ticker mappings for better claim association

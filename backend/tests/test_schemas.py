@@ -11,6 +11,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+from app.schemas.agents import AgentCreateRequest
 from app.schemas.analysis import (
     AIPredictionSchema,
     AnomalyAlertSchema,
@@ -18,12 +19,42 @@ from app.schemas.analysis import (
     NodeExecutionSchema,
     NumericalClaimSchema,
     SignalCardSchema,
+    SignalChatCitation,
+    SignalChatRequest,
+    SignalChatResponse,
     SignalSourceSchema,
     SupplyChainImpactSchema,
 )
 from app.schemas.common import ErrorDetail, ErrorResponse, HealthResponse, PaginatedResponse
-from app.schemas.pipeline import PipelineRunSchema, RunRequest, RunSummary, SSEEvent
+from app.schemas.pipeline import (
+    PipelineRunSchema,
+    RunFanoutRequest,
+    RunFanoutResponse,
+    RunRequest,
+    RunSectorFanoutRequest,
+    RunSummary,
+    SSEEvent,
+)
 from app.schemas.reports import AccuracyStats, PredictionSchema, ReportDetail, ReportSummary, SignalTypeBreakdown
+
+
+# ══════════════════════════════════════════════════════════════════
+# agents.py
+# ══════════════════════════════════════════════════════════════════
+
+class TestAgentCreateRequest:
+    def test_valid_custom_skill(self):
+        req = AgentCreateRequest(
+            name=" Options Flow Analyst ",
+            skill_content="Focus on options flow, implied volatility, dealer gamma, and positioning changes.",
+        )
+        assert req.name == "Options Flow Analyst"
+        assert req.skill_name is None
+        assert req.skill_type == "domain"
+
+    def test_skill_content_must_be_substantial(self):
+        with pytest.raises(ValidationError):
+            AgentCreateRequest(name="Tiny Skill", skill_content="too short")
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -183,6 +214,33 @@ class TestSupplyChainImpactSchema:
             assert s.direction == d
 
 
+class TestSignalChatSchemas:
+    def test_request_minimal(self):
+        req = SignalChatRequest(question="What changed?")
+        assert req.question == "What changed?"
+        assert req.history == []
+
+    def test_request_accepts_history_and_context(self):
+        req = SignalChatRequest(
+            question="Why is recommendation locked?",
+            context="Recommendation allowed: no",
+            history=[{"role": "user", "content": "What changed?"}],
+        )
+        assert req.context == "Recommendation allowed: no"
+        assert req.history[0].role == "user"
+
+    def test_response_citations(self):
+        citation = SignalChatCitation(
+            label="source: reuters.com",
+            source_type="source",
+            source="reuters.com",
+            url="https://example.com",
+            quote="Demand rose.",
+        )
+        res = SignalChatResponse(answer="Demand rose.", citations=[citation], limitations=[])
+        assert res.citations[0].label == "source: reuters.com"
+
+
 # ══════════════════════════════════════════════════════════════════
 # pipeline.py
 # ══════════════════════════════════════════════════════════════════
@@ -201,6 +259,42 @@ class TestRunRequest:
     def test_agent_id_optional(self):
         r = RunRequest(ticker="NVDA", sector_id="ai", agent_id=42)
         assert r.agent_id == 42
+
+
+class TestRunFanoutRequest:
+    def test_sector_id_optional(self):
+        r = RunFanoutRequest(ticker="NVDA")
+        assert r.ticker == "NVDA"
+        assert r.sector_id is None
+        assert r.agent_ids is None
+
+    def test_accepts_agent_ids(self):
+        r = RunFanoutRequest(ticker="NVDA", agent_ids=[1, 2, 3])
+        assert r.agent_ids == [1, 2, 3]
+
+    def test_agent_ids_must_not_be_empty(self):
+        with pytest.raises(ValidationError):
+            RunFanoutRequest(ticker="NVDA", agent_ids=[])
+
+    def test_response_shape(self):
+        r = RunFanoutResponse(
+            ticker="NVDA",
+            sector_id="ai_semiconductors",
+            runs=[{"run_id": "r-1", "agent_id": 1, "agent_name": "Supply Chain Analyst"}],
+        )
+        assert r.runs[0].status == "pending"
+
+
+class TestRunSectorFanoutRequest:
+    def test_valid_sector_request(self):
+        r = RunSectorFanoutRequest(sector_id="ai_semiconductors", tickers=["NVDA", "AMD"])
+        assert r.sector_id == "ai_semiconductors"
+        assert r.tickers == ["NVDA", "AMD"]
+        assert r.agent_ids is None
+
+    def test_tickers_must_not_be_empty(self):
+        with pytest.raises(ValidationError):
+            RunSectorFanoutRequest(sector_id="ai_semiconductors", tickers=[])
 
 
 class TestPipelineRunSchema:

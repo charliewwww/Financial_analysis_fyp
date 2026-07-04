@@ -194,6 +194,18 @@ def _parse_entry(entry, source_name: str) -> dict | None:
     if not title:
         return None
 
+    publisher = ""
+    publisher_url = ""
+    aggregator = ""
+    if source_name.startswith("Google News"):
+        publisher = _entry_source_title(entry)
+        publisher_url = _entry_source_url(entry)
+        clean_title, title_publisher = _split_google_news_title(title)
+        if title_publisher:
+            title = clean_title
+            publisher = publisher or title_publisher
+        aggregator = source_name
+
     # Get summary/description
     summary = ""
     if hasattr(entry, "summary"):
@@ -219,11 +231,34 @@ def _parse_entry(entry, source_name: str) -> dict | None:
     return {
         "title": title,
         "summary": summary,
-        "source": source_name,
+        "source": publisher or source_name,
+        "aggregator": aggregator,
+        "source_url": publisher_url,
         "published": published,
         "link": link,
         "relevance": "",  # filled in by _is_relevant
     }
+
+
+def _entry_source_title(entry) -> str:
+    source = getattr(entry, "source", None)
+    title = source.get("title", "") if isinstance(source, dict) else getattr(source, "title", "")
+    return title.strip() if isinstance(title, str) else ""
+
+
+def _entry_source_url(entry) -> str:
+    source = getattr(entry, "source", None)
+    url = source.get("href", "") if isinstance(source, dict) else getattr(source, "href", "")
+    return url.strip() if isinstance(url, str) else ""
+
+
+def _split_google_news_title(title: str) -> tuple[str, str]:
+    """Google News RSS often formats titles as '<headline> - <publisher>'."""
+    headline, sep, publisher = title.rpartition(" - ")
+    publisher = publisher.strip()
+    if not sep or not headline.strip() or not publisher or len(publisher) > 60:
+        return title, ""
+    return headline.strip(), publisher
 
 
 def _is_relevant(article: dict, keywords: list[str], tickers: list[str]) -> bool:

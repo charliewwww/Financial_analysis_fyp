@@ -85,6 +85,21 @@ class TestScoreNode:
         result = score_node(populated_state)
         assert result.confidence_score >= 5.0
 
+    def test_google_news_publishers_count_as_distinct_sources(self):
+        """Google News title suffixes should preserve publisher diversity."""
+        state = PipelineState()
+        state.articles = [
+            Article(title="NVDA rally extends - CNBC", source="Google News (NVDA)", link="L", published="2024-01-01", raw_summary="T"),
+            Article(title="NVDA demand improves - Reuters", source="Google News (NVDA)", link="L", published="2024-01-01", raw_summary="T"),
+            Article(title="NVDA valuation debate - MarketWatch", source="Google News (NVDA)", link="L", published="2024-01-01", raw_summary="T"),
+        ]
+        state.prices = [{"ticker": "NVDA", "price": 100}]
+        state.technicals = [{"ticker": "NVDA", "rsi_14": 50}]
+        state.validation_status = "PASSED"
+
+        result = score_node(state)
+        assert result.confidence_breakdown["source_diversity"] == pytest.approx(0.75)
+
 
 # ═══════════════════════════════════════════════════════════════════
 # should_refetch — conditional edge after Reflect

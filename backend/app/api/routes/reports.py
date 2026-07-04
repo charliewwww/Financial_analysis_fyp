@@ -46,11 +46,12 @@ async def list_reports(
     db: DB,
     user: CurrentUser,
     sector_id: str | None = Query(default=None, description="Filter by sector key."),
+    market: str | None = Query(default=None, description="us | hk"),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
 ) -> PaginatedResponse[ReportSummary]:
     items, total = await report_repo.list_reports(
-        db, sector_id=sector_id, user_email=user, page=page, page_size=page_size
+        db, sector_id=sector_id, market=market, user_email=user, page=page, page_size=page_size
     )
     return PaginatedResponse(
         items=items,

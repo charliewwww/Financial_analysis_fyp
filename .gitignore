@@ -5,3 +5,5 @@ __pycache__/
 *.db
 .streamlit/
 chroma_db/
+scripts/scratch/
+docs/

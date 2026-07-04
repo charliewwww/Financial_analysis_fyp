@@ -9,17 +9,6 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 
-const AVAILABLE_SECTORS = [
-  { id: "ai_semiconductors", label: "AI & Semiconductors" },
-  { id: "ev_battery", label: "EV & Battery" },
-  { id: "cloud_infrastructure", label: "Cloud Infrastructure" },
-  { id: "fintech", label: "FinTech" },
-  { id: "biotech", label: "Biotech" },
-  { id: "energy_transition", label: "Energy Transition" },
-  { id: "supply_chain", label: "Supply Chain" },
-  { id: "consumer_tech", label: "Consumer Tech" },
-];
-
 export default function ProfilePage() {
   const qc = useQueryClient();
 
@@ -31,17 +20,17 @@ export default function ProfilePage() {
 
   const [username, setUsername] = useState<string>("");
   const [usernameEditing, setUsernameEditing] = useState(false);
-  const [sectorError, setSectorError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const mutation = useMutation({
     mutationFn: (body: UserUpdateRequest) => updateMe(body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["me"] });
       setUsernameEditing(false);
-      setSectorError(null);
+      setSaveError(null);
     },
     onError: (err: Error) => {
-      setSectorError(err.message);
+      setSaveError(err.message);
     },
   });
 
@@ -61,15 +50,6 @@ export default function ProfilePage() {
         Failed to load profile. Make sure you are authenticated.
       </p>
     );
-  }
-
-  const savedSectors = profile.saved_sectors ?? [];
-
-  function toggleSector(id: string) {
-    const next = savedSectors.includes(id)
-      ? savedSectors.filter((s) => s !== id)
-      : [...savedSectors, id];
-    mutation.mutate({ saved_sectors: next });
   }
 
   function handleUsernameSubmit(e: React.FormEvent) {
@@ -133,44 +113,8 @@ export default function ProfilePage() {
               </Button>
             </div>
           )}
-        </CardContent>
-      </Card>
-
-      {/* Saved sectors */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Saved sectors</CardTitle>
-          <p className="text-xs text-muted-foreground">
-            Sectors you follow appear first in the Morning Brief filter.
-          </p>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-2">
-            {AVAILABLE_SECTORS.map(({ id, label }) => {
-              const active = savedSectors.includes(id);
-              return (
-                <button
-                  key={id}
-                  onClick={() => toggleSector(id)}
-                  disabled={mutation.isPending}
-                  className="cursor-pointer"
-                >
-                  <Badge
-                    variant={active ? "default" : "outline"}
-                    className={
-                      active
-                        ? "bg-emerald-700 text-white hover:bg-emerald-600"
-                        : "hover:bg-accent"
-                    }
-                  >
-                    {label}
-                  </Badge>
-                </button>
-              );
-            })}
-          </div>
-          {sectorError && (
-            <p className="mt-2 text-xs text-destructive">{sectorError}</p>
+          {saveError && (
+            <p className="mt-2 text-xs text-destructive">{saveError}</p>
           )}
         </CardContent>
       </Card>

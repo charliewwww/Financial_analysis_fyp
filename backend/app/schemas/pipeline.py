@@ -16,9 +16,28 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.schemas.analysis import NodeExecutionSchema
 
 
+class _LLMCredentialsMixin(BaseModel):
+    """Optional browser-supplied LLM credentials, scoped to a single run.
+
+    These are sent per-request from the user's browser, used only for that
+    run, and are NEVER persisted server-side or written to logs. When absent,
+    the server's own env credentials are used instead. Supplying an api_key
+    also lifts the curated model allow-list (it is the user's own provider).
+    """
+
+    api_key: str | None = Field(
+        default=None,
+        description="User-supplied LLM API key. Used for this run only; never stored or logged.",
+    )
+    base_url: str | None = Field(
+        default=None,
+        description="Optional OpenAI-compatible base URL for the user's provider.",
+    )
+
+
 # ── Trigger ────────────────────────────────────────────────────────
 
-class RunRequest(BaseModel):
+class RunRequest(_LLMCredentialsMixin):
     """
     Request body for POST /api/pipeline/runs.
 
@@ -43,6 +62,106 @@ class RunRequest(BaseModel):
             "Intended for local E2E testing only."
         ),
     )
+    model: str | None = Field(
+        default=None,
+        description="Optional per-run reasoning model override.",
+    )
+
+
+class RunFanoutRequest(_LLMCredentialsMixin):
+    """
+    Request body for POST /api/pipeline/runs/fanout.
+
+    Starts one pipeline run per selected agent. sector_id is optional because
+    the Board of Analysts can infer it for known tickers from config/sectors.py.
+    """
+
+    ticker: str = Field(..., description="Target ticker, e.g. 'NVDA' or '0700.HK'.")
+    sector_id: str | None = Field(
+        default=None,
+        description="Optional sector override. Omit to infer from the ticker catalog.",
+    )
+    agent_ids: list[int] | None = Field(
+        default=None,
+        min_length=1,
+        max_length=16,
+        description="Optional agent ids. Omit to run every registered analyst.",
+    )
+    model: str | None = Field(
+        default=None,
+        description="Optional per-run reasoning model override (must be in the curated allow-list).",
+    )
+    max_fetch_retries: int = Field(default=1, ge=0, le=3)
+    max_validation_retries: int = Field(default=1, ge=0, le=3)
+    dry_run: bool = Field(default=False)
+
+
+class RunSectorFanoutRequest(_LLMCredentialsMixin):
+    """Request body for POST /api/pipeline/runs/sector-fanout."""
+
+    sector_id: str = Field(..., description="Sector to run, e.g. 'ai_semiconductors'.")
+    tickers: list[str] | None = Field(
+        default=None,
+        min_length=1,
+        max_length=25,
+        description="Optional ticker subset. Omit to run every ticker in the sector.",
+    )
+    agent_ids: list[int] | None = Field(
+        default=None,
+        min_length=1,
+        max_length=16,
+        description="Optional agent ids. Omit to run every registered analyst.",
+    )
+    model: str | None = Field(
+        default=None,
+        description="Optional per-run reasoning model override (must be in the curated allow-list).",
+    )
+    max_fetch_retries: int = Field(default=1, ge=0, le=3)
+    max_validation_retries: int = Field(default=1, ge=0, le=3)
+    dry_run: bool = Field(default=False)
+
+
+class RunSectorSynthesisRequest(_LLMCredentialsMixin):
+    """Request body for POST /api/pipeline/runs/sector-synthesis.
+
+    Produces ONE board-level sector synthesis run (macro → trend →
+    second-order effects across constituents) rather than a per-ticker fanout.
+    """
+
+    sector_id: str = Field(..., description="Sector to synthesise, e.g. 'us_technology'.")
+    model: str | None = Field(
+        default=None,
+        description="Optional per-run reasoning model override (must be in the curated allow-list).",
+    )
+    max_fetch_retries: int = Field(default=1, ge=0, le=3)
+    max_validation_retries: int = Field(default=1, ge=0, le=3)
+
+
+class RunSynthesisResponse(BaseModel):
+    """Response body for POST /api/pipeline/runs/sector-synthesis."""
+
+    run_id: str
+    sector_id: str
+    sector_label: str
+    status: Literal["pending"] = "pending"
+
+
+class RunFanoutItem(BaseModel):
+    """One run launched as part of a Board of Analysts fanout."""
+
+    run_id: str
+    agent_id: int
+    agent_name: str
+    status: Literal["pending"] = "pending"
+
+
+class RunFanoutResponse(BaseModel):
+    """Response body for POST /api/pipeline/runs/fanout."""
+
+    ticker: str
+    sector_id: str
+    dry_run: bool = False
+    runs: list[RunFanoutItem]
 
 
 # ── Full run record ────────────────────────────────────────────────
@@ -62,6 +181,8 @@ class PipelineRunSchema(BaseModel):
     run_id: str
     ticker: str
     sector_id: str
+    agent_id: int | None = None
+    agent_name: str | None = None
     status: Literal["pending", "running", "completed", "failed"]
     current_node: str | None = None
     error: str | None = None
@@ -83,10 +204,14 @@ class RunSummary(BaseModel):
     run_id: str
     ticker: str
     sector_id: str
+    agent_id: int | None = None
+    agent_name: str | None = None
     status: Literal["pending", "running", "completed", "failed"]
     created_at: str
+    started_at: str | None = None
     finished_at: str | None = None
     current_node: str | None = None
+    error: str | None = None
     signal_card_id: int | None = None
 
 

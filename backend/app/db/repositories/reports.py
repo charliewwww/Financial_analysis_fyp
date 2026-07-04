@@ -66,6 +66,7 @@ async def list_reports(
     db: AsyncConnection,
     *,
     sector_id: str | None = None,
+    market: str | None = None,
     user_email: str | None = None,
     page: int = 1,
     page_size: int = 20,
@@ -74,6 +75,10 @@ async def list_reports(
     Paginated list of reports for the Reports page.
     Returns only lightweight columns — no snapshot blobs.
     Scoped to the requesting user; legacy rows (user_email IS NULL) are shared.
+
+    `market` ('us' | 'hk') keeps a Hong Kong session free of US reports and
+    vice-versa. HK sectors are prefixed 'hk_'; everything else counts as US
+    (so legacy, non-prefixed sector ids stay visible in the US view).
     """
     base = select(*_LIST_COLS).order_by(reports.c.created_at.desc())
     count_q = select(func.count()).select_from(reports)
@@ -89,6 +94,15 @@ async def list_reports(
     if sector_id:
         base = base.where(reports.c.sector_id == sector_id)
         count_q = count_q.where(reports.c.sector_id == sector_id)
+
+    if market:
+        m = market.strip().lower()
+        if m == "hk":
+            base = base.where(reports.c.sector_id.like("hk_%"))
+            count_q = count_q.where(reports.c.sector_id.like("hk_%"))
+        elif m == "us":
+            base = base.where(reports.c.sector_id.notlike("hk_%"))
+            count_q = count_q.where(reports.c.sector_id.notlike("hk_%"))
 
     total: int = (await db.execute(count_q)).scalar_one()
     rows = (
@@ -237,6 +251,7 @@ async def create_report_from_state(
                 ai_predicted_change=ai.get("predicted_change"),
                 ai_reasoning=ai.get("reasoning"),
                 ai_risk=ai.get("key_risk"),
+                user_email=user_email,
             )
         )
 

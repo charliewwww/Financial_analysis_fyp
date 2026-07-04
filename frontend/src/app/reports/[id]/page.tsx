@@ -1,39 +1,213 @@
 "use client";
 
+import Link from "next/link";
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
 import ReactMarkdown from "react-markdown";
-import { fetchReport } from "@/lib/api";
-import { splitSections } from "@/lib/parse-analysis";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Separator } from "@/components/ui/separator";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+  AlertTriangle,
+  ArrowLeft,
+  BarChart3,
+  CheckCircle2,
+  FileText,
+  Gauge,
+  LineChart,
+  LinkIcon,
+  ShieldAlert,
+  Workflow,
+} from "lucide-react";
 
-const SECTIONS: Array<{
-  key: "thesis" | "evidence" | "chainOfThought" | "riskAssessment" | "predictions";
-  title: string;
-}> = [
-  { key: "thesis", title: "Thesis" },
-  { key: "evidence", title: "Evidence" },
-  { key: "chainOfThought", title: "Chain of Thought" },
-  { key: "riskAssessment", title: "Risk Assessment" },
-  { key: "predictions", title: "Predictions" },
-];
+import { fetchReport } from "@/lib/api";
+import { extractSignals, extractThesis, splitNamedSections } from "@/lib/parse-analysis";
+import { confidenceToTen, formatScore } from "@/lib/format";
+import { buildCitationResolver, linkifyCitations } from "@/lib/citations";
+import type { Prediction, Signal } from "@/types/api";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { MetricChip, Pill, RingSVG, friendlyValidationStatus, type PillVariant } from "@/components/primitives";
+
+const SIGNAL_VARIANT: Record<Signal, PillVariant> = {
+  BULLISH: "green",
+  BEARISH: "red",
+  NEUTRAL: "gray",
+};
+
+const SECTION_ICONS: Record<string, typeof FileText> = {
+  EVIDENCE: CheckCircle2,
+  "KEY DEVELOPMENTS": FileText,
+  "DEEP CONTEXT": Gauge,
+  MACRO: BarChart3,
+  "MACROECONOMIC CONTEXT": BarChart3,
+  "SUPPLY CHAIN": Workflow,
+  "SUPPLY CHAIN ANALYSIS": Workflow,
+  "COMPANY SPOTLIGHT": LineChart,
+  "RISK FACTORS": ShieldAlert,
+  "RISK ASSESSMENT": ShieldAlert,
+};
+
+function fmtDate(iso: string | null | undefined): string {
+  if (!iso) return "-";
+  return new Date(iso).toLocaleString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function fmtMoney(value: number | null | undefined): string {
+  if (value == null || Number.isNaN(value)) return "-";
+  return `$${value.toFixed(2)}`;
+}
 
 function MarkdownBlock({ children }: { children: string }) {
   return (
-    <div className="prose prose-invert prose-sm max-w-none prose-headings:font-semibold prose-p:leading-relaxed prose-li:my-1">
-      <ReactMarkdown>{children}</ReactMarkdown>
+    <div className="prose prose-sm max-w-none prose-headings:mt-0 prose-p:leading-7 prose-li:my-1 dark:prose-invert">
+      <ReactMarkdown
+        components={{
+          a: ({ href, children: linkChildren, ...rest }) => {
+            const url = typeof href === "string" ? href : "";
+            const external = /^https?:\/\//i.test(url);
+            return (
+              <a
+                href={url || "#source-pack"}
+                {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+                className="font-medium no-underline hover:underline"
+                style={{ color: "var(--al-gold)" }}
+                {...rest}
+              >
+                {linkChildren}
+              </a>
+            );
+          },
+        }}
+      >
+        {children}
+      </ReactMarkdown>
     </div>
+  );
+}
+
+function PredictionCard({ prediction }: { prediction: Prediction }) {
+  const direction = (prediction.ai_direction ?? "NEUTRAL").toUpperCase() as Signal;
+  const variant = SIGNAL_VARIANT[direction] ?? "gray";
+  const result =
+    prediction.prediction_correct == null
+      ? { label: "pending", variant: "gray" as PillVariant }
+      : prediction.prediction_correct
+        ? { label: "correct", variant: "green" as PillVariant }
+        : { label: "missed", variant: "red" as PillVariant };
+  const actualChange = prediction.actual_change_1w;
+
+  return (
+    <article className="rounded-xl border p-4" style={{ borderColor: "var(--al-outline)" }}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="font-mono text-lg font-bold">{prediction.ticker}</div>
+          <div className="mt-1 text-xs" style={{ color: "var(--al-on-surface-muted)" }}>
+            {fmtMoney(prediction.price_at_report)} at report
+            {prediction.price_1w_later != null ? ` -> ${fmtMoney(prediction.price_1w_later)}` : " -> awaiting"}
+          </div>
+        </div>
+        <div className="flex flex-wrap justify-end gap-1.5">
+          <Pill variant={variant}>{direction.toLowerCase()}</Pill>
+          <Pill variant={result.variant}>{result.label}</Pill>
+        </div>
+      </div>
+
+      {prediction.ai_predicted_change ? (
+        <div className="mt-3 text-sm font-semibold">Expected move: {prediction.ai_predicted_change}</div>
+      ) : null}
+
+      {actualChange != null ? (
+        <div className="mt-3 flex items-center gap-3 text-xs">
+          <div className="bar-track flex-1">
+            <div
+              className={actualChange >= 0 ? "bar-fill bar-bullish" : "bar-fill bar-bearish"}
+              style={{ width: `${Math.min(100, Math.max(8, Math.abs(actualChange) * 8))}%` }}
+            />
+          </div>
+          <span className="tabular-nums" style={{ color: actualChange >= 0 ? "#16a34a" : "#dc2626" }}>
+            {actualChange >= 0 ? "+" : ""}{actualChange.toFixed(1)}%
+          </span>
+        </div>
+      ) : null}
+
+      {prediction.ai_reasoning ? (
+        <p className="mt-3 line-clamp-3 text-sm leading-6" style={{ color: "var(--al-on-surface-muted)" }}>
+          {prediction.ai_reasoning}
+        </p>
+      ) : null}
+      {prediction.ai_risk ? (
+        <div className="mt-3 flex gap-2 text-xs text-amber-600 dark:text-amber-400">
+          <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+          <span className="line-clamp-2">{prediction.ai_risk}</span>
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
+function ParsedSignalCard({ signal }: { signal: ReturnType<typeof extractSignals>[number] }) {
+  return (
+    <article className="rounded-xl border p-4" style={{ borderColor: "var(--al-outline)" }}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="font-mono text-lg font-bold">{signal.ticker}</div>
+        <Pill variant={SIGNAL_VARIANT[signal.direction]}>{signal.direction.toLowerCase()}</Pill>
+      </div>
+      {signal.move ? <div className="mt-3 text-sm font-semibold">Expected move: {signal.move}</div> : null}
+      {signal.reasoning ? (
+        <p className="mt-3 text-sm leading-6" style={{ color: "var(--al-on-surface-muted)" }}>
+          {signal.reasoning}
+        </p>
+      ) : null}
+      {signal.risk ? (
+        <div className="mt-3 flex gap-2 text-xs text-amber-600 dark:text-amber-400">
+          <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+          <span>{signal.risk}</span>
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
+function TechnicalSnapshot({ rows }: { rows: Array<Record<string, unknown>> }) {
+  if (!rows.length) return null;
+  const preferredKeys = ["ticker", "price", "rsi", "macd_signal", "trend", "change_1w_pct", "sma_20", "sma_50"];
+
+  return (
+    <section className="al-glass p-5 space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <div className="al-eyebrow">Technical analysis</div>
+          <h2 className="text-lg">Snapshot</h2>
+        </div>
+        <Pill variant="gray">{rows.length} tickers</Pill>
+      </div>
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {rows.slice(0, 6).map((row, index) => {
+          const ticker = String(row.ticker ?? row.symbol ?? `Ticker ${index + 1}`);
+          return (
+            <article key={`${ticker}-${index}`} className="rounded-xl border p-4" style={{ borderColor: "var(--al-outline)" }}>
+              <div className="font-mono text-sm font-bold">{ticker}</div>
+              <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                {preferredKeys
+                  .filter((key) => key !== "ticker" && row[key] != null)
+                  .slice(0, 6)
+                  .map((key) => (
+                    <div key={key}>
+                      <div className="al-eyebrow">{key.replaceAll("_", " ")}</div>
+                      <div className="mt-1 tabular-nums">{String(row[key])}</div>
+                    </div>
+                  ))}
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
@@ -44,150 +218,149 @@ export default function ReportDetailPage() {
   const { data: report, isLoading, isError } = useQuery({
     queryKey: ["report", reportId],
     queryFn: () => fetchReport(reportId),
-    enabled: !isNaN(reportId),
+    enabled: !Number.isNaN(reportId),
   });
+
+  const parsed = useMemo(() => {
+    const analysis = report?.analysis ?? "";
+    return {
+      thesis: extractThesis(analysis),
+      parsedSignals: extractSignals(analysis),
+      sections: splitNamedSections(analysis),
+    };
+  }, [report?.analysis]);
 
   if (isLoading) {
     return (
       <div className="space-y-4">
-        <Skeleton className="h-8 w-56" />
-        <Skeleton className="h-40 w-full" />
+        <Skeleton className="h-10 w-52" />
+        <Skeleton className="h-36 w-full rounded-2xl" />
+        <Skeleton className="h-64 w-full rounded-2xl" />
       </div>
     );
   }
 
   if (isError || !report) {
-    return <p className="text-sm text-red-400">Report not found.</p>;
+    return <p className="text-sm text-red-500">Report not found.</p>;
   }
 
-  const sections = splitSections(report.analysis ?? "");
-  const noSectionsMatched =
-    !sections.remainder && SECTIONS.every(({ key }) => !sections[key]);
+  const score = confidenceToTen(report.confidence_score);
+  const validation = friendlyValidationStatus(report.validation_status);
+  const timingSeconds = typeof report.timing_snapshot?.total_seconds === "number"
+    ? report.timing_snapshot.total_seconds
+    : null;
+  const sections = parsed.sections.length ? parsed.sections : [{ heading: "Analysis", content: report.analysis ?? "" }];
+  const resolveCitation = buildCitationResolver(report.news_snapshot ?? []);
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">{report.sector_name}</h1>
-          <p className="text-sm text-muted-foreground">
-            {new Date(report.created_at).toLocaleDateString("en-US", {
-              month: "long",
-              day: "numeric",
-              year: "numeric",
-            })}
+      <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div className="space-y-3">
+          <Link href="/reports" className="inline-flex items-center gap-2 text-sm hover:underline" style={{ color: "var(--al-gold)" }}>
+            <ArrowLeft className="size-4" aria-hidden /> Back to reports
+          </Link>
+          <div>
+            <div className="al-eyebrow">Analysis report</div>
+            <h1 className="mt-1 text-3xl md:text-4xl">{report.sector_name}</h1>
+            <p className="mt-2 text-sm" style={{ color: "var(--al-on-surface-muted)" }}>
+              Report #{report.id} - {fmtDate(report.created_at)}
+            </p>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {validation ? <Pill variant={validation.variant}>{validation.label}</Pill> : null}
+          {report.status ? <Pill variant="gray">{report.status}</Pill> : null}
+        </div>
+      </header>
+
+      {parsed.thesis ? (
+        <section className="al-thesis-banner rounded-r-[var(--al-radius-card)]">
+          <div className="al-thesis-banner-label">Thesis</div>
+          <div className="al-thesis-banner-text">{parsed.thesis}</div>
+        </section>
+      ) : null}
+
+      <section className="grid gap-5 lg:grid-cols-[0.82fr_1.18fr]">
+        <div className="al-glass p-5 flex flex-col items-center justify-center gap-3">
+          <RingSVG score={score ?? 0} max={10} size={148} />
+          <div className="text-center text-sm" style={{ color: "var(--al-on-surface-muted)" }}>
+            Evidence confidence on the report&apos;s native 0-10 scale.
+          </div>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <MetricChip label="Evidence" value={score == null ? "-" : `${formatScore(score)}/10`} />
+          <MetricChip label="Validation" value={validation?.label ?? report.validation_status ?? "pending"} />
+          <MetricChip label="Articles" value={report.news_used ?? report.news_snapshot.length} />
+          <MetricChip label="Prices" value={report.prices_snapshot.length} />
+          <MetricChip label="Filings" value={report.filings_snapshot.length} />
+          <MetricChip label="Pipeline" value={timingSeconds == null ? "-" : `${Math.round(timingSeconds)}s`} />
+        </div>
+      </section>
+
+      {report.predictions.length || parsed.parsedSignals.length ? (
+        <section className="al-glass p-5 space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="al-eyebrow">Signal predictions</div>
+              <h2 className="text-xl">One-week directional calls</h2>
+            </div>
+            <Pill variant="gold">{report.predictions.length || parsed.parsedSignals.length} calls</Pill>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {report.predictions.length
+              ? report.predictions.map((prediction) => <PredictionCard key={prediction.id} prediction={prediction} />)
+              : parsed.parsedSignals.map((signal) => <ParsedSignalCard key={signal.ticker} signal={signal} />)}
+          </div>
+        </section>
+      ) : null}
+
+      {report.news_summary ? (
+        <section id="source-pack" className="al-glass p-5 space-y-3">
+          <div className="flex items-center gap-2">
+            <LinkIcon className="size-4" aria-hidden style={{ color: "var(--al-gold)" }} />
+            <h2 className="text-lg">News Summary</h2>
+          </div>
+          <MarkdownBlock>{linkifyCitations(report.news_summary, resolveCitation)}</MarkdownBlock>
+        </section>
+      ) : null}
+
+      <TechnicalSnapshot rows={report.technicals_snapshot} />
+
+      <section className="space-y-4">
+        {sections.map((section) => {
+          const Icon = SECTION_ICONS[section.heading.toUpperCase()] ?? FileText;
+          return (
+            <article key={section.heading} className="al-glass p-5">
+              <div className="mb-4 flex items-center gap-2">
+                <Icon className="size-4" aria-hidden style={{ color: "var(--al-gold)" }} />
+                <h2 className="text-lg">{section.heading}</h2>
+              </div>
+              <MarkdownBlock>{linkifyCitations(section.content, resolveCitation)}</MarkdownBlock>
+            </article>
+          );
+        })}
+      </section>
+
+      {report.validation ? (
+        <section className="al-glass p-5 space-y-3">
+          <div className="flex items-center gap-2">
+            <ShieldAlert className="size-4" aria-hidden style={{ color: "var(--al-gold)" }} />
+            <h2 className="text-lg">Validation Notes</h2>
+          </div>
+          <p className="text-sm leading-7" style={{ color: "var(--al-on-surface-muted)" }}>
+            {report.validation}
           </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {report.validation_status && (
-            <Badge variant="outline" className="capitalize">
-              {report.validation_status}
-            </Badge>
-          )}
-          {report.confidence_score != null && (
-            <span className="text-sm text-muted-foreground">
-              {Math.round(report.confidence_score * 100)}% confidence
-            </span>
-          )}
-        </div>
+        </section>
+      ) : null}
+
+      <div className="flex justify-end">
+        <Link href="/reports">
+          <Button variant="outline" className="rounded-full">
+            <ArrowLeft data-icon="inline-start" className="size-4" aria-hidden />
+            Reports
+          </Button>
+        </Link>
       </div>
-
-      {sections.remainder && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Overview</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <MarkdownBlock>{sections.remainder}</MarkdownBlock>
-          </CardContent>
-        </Card>
-      )}
-
-      {SECTIONS.map(({ key, title }) =>
-        sections[key] ? (
-          <Card key={key}>
-            <CardHeader>
-              <CardTitle className="text-sm">{title}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <MarkdownBlock>{sections[key] as string}</MarkdownBlock>
-            </CardContent>
-          </Card>
-        ) : null,
-      )}
-
-      {noSectionsMatched && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Analysis</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <MarkdownBlock>{report.analysis ?? ""}</MarkdownBlock>
-          </CardContent>
-        </Card>
-      )}
-
-      {report.news_summary && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">News Summary</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <MarkdownBlock>{report.news_summary}</MarkdownBlock>
-          </CardContent>
-        </Card>
-      )}
-
-      {report.validation && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Validation Notes</CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm">{report.validation}</CardContent>
-        </Card>
-      )}
-
-      {report.predictions.length > 0 && (
-        <>
-          <Separator />
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm">Predictions</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Ticker</TableHead>
-                    <TableHead>AI direction</TableHead>
-                    <TableHead>Price at report</TableHead>
-                    <TableHead>Price 1w later</TableHead>
-                    <TableHead>Correct</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {report.predictions.map((p) => (
-                    <TableRow key={p.id}>
-                      <TableCell className="font-medium">{p.ticker}</TableCell>
-                      <TableCell>{p.ai_direction ?? "—"}</TableCell>
-                      <TableCell>{p.price_at_report?.toFixed(2) ?? "—"}</TableCell>
-                      <TableCell>{p.price_1w_later?.toFixed(2) ?? "—"}</TableCell>
-                      <TableCell>
-                        {p.prediction_correct == null ? (
-                          <span className="text-muted-foreground">pending</span>
-                        ) : p.prediction_correct ? (
-                          <span className="text-emerald-400">✓</span>
-                        ) : (
-                          <span className="text-red-400">✗</span>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </>
-      )}
     </div>
   );
 }

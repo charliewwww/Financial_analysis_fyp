@@ -19,7 +19,8 @@ Operations:
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+import json
+from datetime import datetime, timedelta, timezone
 from typing import Any, Literal
 
 from sqlalchemy import func, insert, select, update
@@ -40,12 +41,56 @@ from app.schemas.pipeline import PipelineRunSchema, RunSummary
 def _normalize_ts(value: Any) -> str:
     if value is None:
         return ""
-    return value.isoformat() if hasattr(value, "isoformat") else str(value)
+    if isinstance(value, datetime):
+        dt = value
+    elif isinstance(value, str):
+        raw = value.strip()
+        if not raw:
+            return ""
+        candidate = raw.replace("Z", "+00:00")
+        if "T" not in candidate and " " in candidate:
+            candidate = candidate.replace(" ", "T", 1)
+        try:
+            dt = datetime.fromisoformat(candidate)
+        except ValueError:
+            return raw
+    else:
+        return str(value)
+
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _coerce_mapping(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str) and value.strip():
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+    return {}
 
 
 def _row_to_signal_card(r: Any) -> SignalCardSchema:
     d = dict(r)
     d["created_at"] = _normalize_ts(d.get("created_at"))
+    raw_state = _coerce_mapping(d.get("raw_pipeline_state"))
+    d["analysis_text"] = str(raw_state.get("analysis_text") or "")
+    d["news_summary"] = str(raw_state.get("news_summary") or "")
+    d["data_sufficiency"] = str(raw_state.get("data_sufficiency") or "")
+    d["sufficiency_reasoning"] = str(raw_state.get("sufficiency_reasoning") or "")
+    d["anomaly_alerts"] = raw_state.get("anomaly_alerts") or []
+    d["article_evidence"] = raw_state.get("articles") or []
+    d["price_snapshot"] = raw_state.get("prices") or []
+    d["technical_snapshot"] = raw_state.get("technicals") or []
+    d["reasoning_scores"] = raw_state.get("reasoning_scores") or {}
+    d["confidence_breakdown"] = raw_state.get("confidence_breakdown") or {}
+    d["rag_metadata"] = raw_state.get("rag_metadata") or {}
+    # Legacy rows lack this flag → default True (treat their conviction as stated).
+    d["conviction_stated"] = bool(raw_state.get("conviction_stated", True))
 
     # Deserialize JSONB → typed sub-schemas
     d["numerical_claims"] = [
@@ -86,6 +131,8 @@ async def create_run(
     run_id: str,
     ticker: str,
     sector_id: str,
+    agent_id: int | None = None,
+    agent_name: str | None = None,
     user_email: str | None = None,
 ) -> int:
     """Insert a new pipeline_runs row.  Returns the integer PK."""
@@ -93,8 +140,10 @@ async def create_run(
         insert(pipeline_runs)
         .values(
             run_id=run_id,
-            ticker=ticker,
+            ticker=ticker.upper(),
             sector_id=sector_id,
+            agent_id=agent_id,
+            agent_name=agent_name,
             status="pending",
             user_email=user_email,
             created_at=datetime.now(timezone.utc),
@@ -136,11 +185,11 @@ async def update_run_status(
     if finished_at is not None:
         values["finished_at"] = finished_at
 
-    await db.execute(
-        update(pipeline_runs)
-        .where(pipeline_runs.c.run_id == run_id)
-        .values(**values)
-    )
+    stmt = update(pipeline_runs).where(pipeline_runs.c.run_id == run_id)
+    if status in ("pending", "running"):
+        stmt = stmt.where(pipeline_runs.c.status.notin_(["completed", "failed"]))
+
+    await db.execute(stmt.values(**values))
 
 
 async def get_run(db: AsyncConnection, run_id: str) -> PipelineRunSchema | None:
@@ -151,6 +200,22 @@ async def get_run(db: AsyncConnection, run_id: str) -> PipelineRunSchema | None:
         )
     ).mappings().first()
 
+    return _row_to_run(row) if row else None
+
+
+async def get_run_for_user(
+    db: AsyncConnection,
+    run_id: str,
+    user_email: str | None = None,
+) -> PipelineRunSchema | None:
+    """Fetch one run, scoped to the requesting user when available."""
+    q = select(pipeline_runs).where(pipeline_runs.c.run_id == run_id)
+    if user_email:
+        q = q.where(
+            (pipeline_runs.c.user_email == user_email)
+            | (pipeline_runs.c.user_email.is_(None))
+        )
+    row = (await db.execute(q)).mappings().first()
     return _row_to_run(row) if row else None
 
 
@@ -167,10 +232,14 @@ async def list_runs(
         pipeline_runs.c.run_id,
         pipeline_runs.c.ticker,
         pipeline_runs.c.sector_id,
+        pipeline_runs.c.agent_id,
+        pipeline_runs.c.agent_name,
         pipeline_runs.c.status,
         pipeline_runs.c.created_at,
+        pipeline_runs.c.started_at,
         pipeline_runs.c.finished_at,
         pipeline_runs.c.current_node,
+        pipeline_runs.c.error,
         pipeline_runs.c.signal_card_id,
     ).order_by(pipeline_runs.c.created_at.desc())
 
@@ -197,11 +266,89 @@ async def list_runs(
     items = []
     for r in rows:
         d = dict(r)
+        if d.get("error") and d.get("status") != "completed":
+            d["status"] = "failed"
         d["created_at"] = _normalize_ts(d.get("created_at"))
+        d["started_at"] = _normalize_ts(d.get("started_at")) or None
         d["finished_at"] = _normalize_ts(d.get("finished_at")) or None
         items.append(RunSummary.model_validate(d))
 
     return items, total
+
+
+async def count_active_runs(
+    db: AsyncConnection,
+    *,
+    user_email: str | None = None,
+) -> int:
+    """
+    Number of runs currently pending or running for a user.
+
+    Used to enforce a per-user concurrency cap on the trigger endpoints so a
+    single client cannot flood the thread pool with hundreds of queued runs.
+    """
+    count_q = (
+        select(func.count())
+        .select_from(pipeline_runs)
+        .where(pipeline_runs.c.status.in_(("pending", "running")))
+    )
+    if user_email:
+        count_q = count_q.where(pipeline_runs.c.user_email == user_email)
+    return int((await db.execute(count_q)).scalar_one())
+
+
+async def count_runs_since(
+    db: AsyncConnection,
+    *,
+    user_email: str,
+    since: datetime,
+) -> int:
+    """
+    Number of runs a user has started since a given UTC instant.
+
+    Backs the per-user daily free-analysis quota (which resets at 00:00 UTC).
+    """
+    count_q = (
+        select(func.count())
+        .select_from(pipeline_runs)
+        .where(pipeline_runs.c.user_email == user_email)
+        .where(pipeline_runs.c.created_at >= since)
+    )
+    return int((await db.execute(count_q)).scalar_one())
+
+
+async def fail_stale_runs(
+    db: AsyncConnection,
+    *,
+    older_than_minutes: int | None = None,
+    reason: str = "Run was interrupted (server restart) and did not finish.",
+) -> int:
+    """
+    Mark pending/running runs as failed so they can't appear "stuck" forever.
+
+    The pipeline executes in an in-process thread pool, so any run still marked
+    pending/running after a restart is an orphan that can never complete. Two
+    modes:
+
+      * ``older_than_minutes=None`` — fail ALL in-flight runs. Used once at
+        startup to reconcile orphans left by the previous process.
+      * ``older_than_minutes=N``    — fail only runs created more than N minutes
+        ago. Used by the periodic reaper to clear genuine zombies without
+        touching healthy, recently-started runs.
+
+    Returns the number of runs updated.
+    """
+    now = datetime.now(timezone.utc)
+    stmt = update(pipeline_runs).where(
+        pipeline_runs.c.status.in_(("pending", "running"))
+    )
+    if older_than_minutes is not None:
+        cutoff = now - timedelta(minutes=older_than_minutes)
+        stmt = stmt.where(pipeline_runs.c.created_at <= cutoff)
+    result = await db.execute(
+        stmt.values(status="failed", error=reason, finished_at=now)
+    )
+    return int(result.rowcount or 0)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -228,6 +375,7 @@ async def create_signal_card(
     sector_context: dict | None = None,
     raw_pipeline_state: dict | None = None,
     user_email: str | None = None,
+    status: str = "active",
 ) -> int:
     """
     Insert a signal card row.  Returns the new card's integer PK.
@@ -254,6 +402,7 @@ async def create_signal_card(
             sector_context=sector_context,
             raw_pipeline_state=raw_pipeline_state,
             user_email=user_email,
+            status=status,
             created_at=datetime.now(timezone.utc),
         )
         .returning(signal_cards.c.id)
@@ -319,6 +468,7 @@ async def list_signal_cards(
     signal: str | None = None,
     signal_type: str | None = None,
     agent_id: int | None = None,
+    market: str | None = None,
     user_email: str | None = None,
     page: int = 1,
     page_size: int = 20,
@@ -331,6 +481,7 @@ async def list_signal_cards(
         signal      → "show me only BULLISH signals"
         signal_type → "show me only FUNDAMENTAL_SHIFT signals"
         agent_id    → "show me signals from the Supply Chain Analyst agent"
+        market      → "show me only HK (or US) tickers" (hk = '*.HK' suffix)
     """
     # Exclude large JSONB blobs from list responses
     list_cols = [
@@ -377,6 +528,14 @@ async def list_signal_cards(
     if agent_id is not None:
         q = q.where(signal_cards.c.agent_id == agent_id)
         count_q = count_q.where(signal_cards.c.agent_id == agent_id)
+    if market:
+        m = market.strip().lower()
+        if m == "hk":
+            q = q.where(signal_cards.c.ticker.like("%.HK"))
+            count_q = count_q.where(signal_cards.c.ticker.like("%.HK"))
+        elif m == "us":
+            q = q.where(signal_cards.c.ticker.notlike("%.HK"))
+            count_q = count_q.where(signal_cards.c.ticker.notlike("%.HK"))
 
     total: int = (await db.execute(count_q)).scalar_one()
     rows = (

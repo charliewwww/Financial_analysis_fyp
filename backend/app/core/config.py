@@ -53,6 +53,46 @@ class Settings(BaseSettings):
     # ── Validation thresholds ─────────────────────────────────────
     numerical_tolerance_pct: float = 5.0
 
+    # ── Pipeline execution ───────────────────────────────────────
+    # The legacy analysis pipeline is blocking and runs in a thread pool.
+    # A full sector board can be 10 tickers x 4 analysts, so the default
+    # allows that product workflow to run in one wave instead of queuing.
+    pipeline_max_workers: int = Field(
+        default=48,
+        ge=1,
+        le=128,
+        description="Maximum concurrent blocking pipeline runs.",
+    )
+
+    # A single client must not be able to flood the thread pool. A full sector
+    # board is ~10 tickers x 4 analysts = 40 runs, so the default leaves
+    # headroom for one board plus a few ad-hoc runs before returning HTTP 429.
+    pipeline_max_active_runs_per_user: int = Field(
+        default=60,
+        ge=1,
+        le=500,
+        description="Max pending+running pipeline runs a single user may hold.",
+    )
+
+    # Each live run owns an in-memory SSE event queue. Cap its size so a run
+    # whose stream is never consumed (or is consumed slowly) cannot grow
+    # unbounded; on overflow the oldest event is dropped (drop-oldest).
+    sse_queue_maxsize: int = Field(
+        default=1000,
+        ge=16,
+        le=100_000,
+        description="Max buffered SSE events per run before dropping oldest.",
+    )
+
+    # Queues whose SSE stream is never opened would otherwise leak forever.
+    # The runner reaps queues older than this TTL on each new launch.
+    sse_queue_orphan_ttl_seconds: int = Field(
+        default=900,
+        ge=30,
+        le=86_400,
+        description="Drop SSE queues older than this many seconds (orphans).",
+    )
+
     # ── Observability (Langfuse) ──────────────────────────────────
     langfuse_public_key: str = ""
     langfuse_secret_key: str = ""
@@ -88,6 +128,90 @@ class Settings(BaseSettings):
             "Set to 'production' when deploying behind Cloudflare Access."
         ),
     )
+
+    # ── Backtester / accountability scheduler ─────────────────────
+    # A background job matures predictions and house verdicts into verified
+    # outcomes (the Track Record engine). Disable in tests/CI.
+    scheduler_enabled: bool = Field(
+        default=True,
+        description="Run the daily outcome-resolution job on startup.",
+    )
+    resolution_interval_hours: int = Field(
+        default=24,
+        ge=1,
+        le=168,
+        description="Hours between automatic outcome-resolution runs.",
+    )
+
+    # ── Stale-run reaper ──────────────────────────────────────
+    # The pipeline runs in an in-process thread pool, so a run still marked
+    # pending/running after a crash/restart is an orphan. On startup ALL such
+    # runs are failed; a periodic sweep also fails any run that has been
+    # in-flight longer than this many minutes (a hung worker safety net).
+    stale_run_timeout_minutes: int = Field(
+        default=30,
+        ge=1,
+        le=1440,
+        description="Fail runs still in-flight after this many minutes.",
+    )
+    stale_run_sweep_minutes: int = Field(
+        default=5,
+        ge=1,
+        le=120,
+        description="How often the stale-run reaper sweeps.",
+    )
+
+    # ── Authentication (self-hosted Google OIDC sign-in) ─────────
+    # Google OAuth 2.0 / OpenID Connect credentials. Create them at
+    # https://console.cloud.google.com/apis/credentials . Required in
+    # production; when empty, only the dev bypass / dev fallback path works.
+    google_client_id: str = ""
+    google_client_secret: str = ""
+
+    # Secret that signs the short-lived OAuth transaction cookie (state + nonce
+    # during the Google redirect). Must be a long random string in production;
+    # a blank value disables the real login flow.
+    session_secret_key: str = ""
+
+    # The logged-in session cookie. It carries only an opaque random token; the
+    # row lives in user_sessions and we persist just the token's hash.
+    session_cookie_name: str = "mp_session"
+    session_ttl_days: int = Field(default=30, ge=1, le=365)
+    # Set False only for local HTTP development; True everywhere served on HTTPS.
+    cookie_secure: bool = True
+    # 'lax' (recommended, CSRF-resistant) | 'strict' | 'none' (cross-site, needs Secure).
+    cookie_samesite: Literal["lax", "strict", "none"] = "lax"
+    # Optional explicit cookie domain (e.g. ".example.com"). Empty = host-only.
+    cookie_domain: str = ""
+
+    # Where to send the browser after login/logout (the frontend origin).
+    frontend_base_url: str = "http://localhost:3000"
+    # Public backend URL used to build the OAuth callback. Empty = infer from the
+    # incoming request (fine locally; set explicitly when behind a proxy/CDN).
+    backend_base_url: str = ""
+
+    # Emails that are always allowed AND granted admin on first sign-in. Seeds
+    # the first operator without editing code. Comma-separated in .env.
+    auth_bootstrap_admin_emails: str = Field(
+        default="",
+        description=(
+            "Comma-separated emails always allowed and granted admin on first "
+            "sign-in (bootstrap operator)."
+        ),
+    )
+
+    # ── Usage quota (app-provided AI) ────────────────────────────
+    # Free analyses a single user may START per UTC day. 0 disables the cap.
+    daily_run_quota: int = Field(default=25, ge=0, le=100_000)
+
+    @property
+    def bootstrap_admin_emails(self) -> list[str]:
+        """Parsed, normalized list of bootstrap-admin emails."""
+        return [
+            e.strip().lower()
+            for e in self.auth_bootstrap_admin_emails.split(",")
+            if e.strip()
+        ]
 
 
 # Single shared instance — import this everywhere.

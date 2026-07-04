@@ -34,6 +34,7 @@ from vectordb.chroma_store import (
 )
 from agents.llm_client import call_llm, call_llm_fast
 from utils.prompts import (
+    SHARED_OUTPUT_CONTRACT,
     SYSTEM_PROMPT_ANALYST,
     SYSTEM_PROMPT_VALIDATOR,
     build_analysis_prompt,
@@ -71,6 +72,8 @@ def _lf_kwargs(state: PipelineState, node_name: str) -> dict:
             "sector_id": state.sector_id,
             "sector_name": state.sector_name,
             "tickers": state.sector_tickers,
+            "agent_id": state.agent_id,
+            "agent_name": state.agent_name,
             "node": node_name,
             "session_id": f"run-{state.created_at}" if state.created_at else None,
             "tags": [f"sector:{state.sector_id}", f"node:{node_name}"],
@@ -294,6 +297,8 @@ def fetch_node(state: PipelineState) -> PipelineState:
                 published=a.get("published", "unknown"),
                 raw_summary=a.get("summary", ""),
                 relevance_tag=a.get("relevance", ""),
+                publisher_url=a.get("source_url", ""),
+                aggregator=a.get("aggregator", ""),
             )
             for a in raw_articles
         ]
@@ -713,13 +718,28 @@ def analyze_node(state: PipelineState) -> PipelineState:
         # Apply token budget — truncate if prompt exceeds MAX_PROMPT_CHARS
         prompt = _truncate_prompt(prompt)
 
+        system_prompt = state.agent_identity or SYSTEM_PROMPT_ANALYST
+        if state.agent_identity and state.agent_identity != SYSTEM_PROMPT_ANALYST:
+            # Specialist analyst (Value / Momentum / Risk / custom). Give it its
+            # OWN lens plus a lens-neutral output contract — not the full
+            # supply-chain prompt. Appending the 93-line supply-chain template
+            # used to drown the persona and make every analyst converge.
+            system_prompt = (
+                f"{state.agent_identity.strip()}\n\n"
+                "Reach your own independent verdict from the lens above. The "
+                "contract below fixes only the output structure so the Decision "
+                "Desk can extract trust fields — it must NOT pull your judgment "
+                "toward a generic consensus.\n\n"
+                f"{SHARED_OUTPUT_CONTRACT}"
+            )
         node.llm_user_prompt = prompt
-        node.llm_system_prompt = SYSTEM_PROMPT_ANALYST[:200]
+        node.llm_system_prompt = system_prompt[:200]
 
         logger.info("Reasoning about %s...", state.sector_name)
         response = call_llm(
             prompt=prompt,
-            system_prompt=SYSTEM_PROMPT_ANALYST,
+            system_prompt=system_prompt,
+            model=state.model_override or None,
             temperature=0.3,
             max_tokens=4096,
             **_lf_kwargs(state, "analyze"),
@@ -805,6 +825,7 @@ def validate_node(state: PipelineState) -> PipelineState:
         response = call_llm(
             prompt=prompt,
             system_prompt=SYSTEM_PROMPT_VALIDATOR,
+            model=state.model_override or None,
             temperature=0.1,
             max_tokens=2048,
             **_lf_kwargs(state, "validate"),
@@ -885,6 +906,16 @@ def validate_node(state: PipelineState) -> PipelineState:
         # persists it. Conditional edge functions must be read-only.
         if state.validation_status == "FAILED":
             state.validation_retry_count += 1
+            if state.validation_retry_count > state.max_validation_retries:
+                all_issues.append(
+                    "⚠️ Validation concerns remained after retries; "
+                    "publishing as warnings for analyst review."
+                )
+                state.validation_status = "PASSED WITH WARNINGS"
+                logger.warning(
+                    "Validation retry budget exhausted; "
+                    "downgrading to PASSED WITH WARNINGS for review."
+                )
 
         # Combined validation report
         state.validation_text = (
@@ -989,7 +1020,7 @@ def score_node(state: PipelineState) -> PipelineState:
         #   come from one feed, cap this component at 0.25.
         diversity_pts = 0.0
         if state.articles:
-            sources = [a.source for a in state.articles]
+            sources = [_article_source_key(a) for a in state.articles]
             unique_sources = len(set(sources))
             if unique_sources >= 4:
                 diversity_pts = 1.0
@@ -1096,6 +1127,11 @@ def save_node(state: PipelineState) -> PipelineState:
     with NodeRunner(state, "save_to_db") as node:
         node.input_keys = ["analysis_text", "validation_text", "confidence_score", "prices"]
         node.output_keys = ["report_id"]
+        if state.validation_status == "FAILED":
+            state.report_id = None
+            node.decision = "skipped_failed_validation"
+            logger.warning("Report save skipped because validation failed")
+            return state
         state.report_id = save_report_from_state(state)
         node.decision = f"report_id={state.report_id}"
         logger.info("Report #%s saved to database", state.report_id)
@@ -1153,8 +1189,11 @@ def should_reanalyze(state: PipelineState) -> str:
                     state.validation_retry_count, state.max_validation_retries)
         return "analyze"
     if state.validation_status == "FAILED":
-        logger.warning("Validation still FAILED after %d retries — scoring anyway",
-                       state.max_validation_retries)
+        logger.warning(
+            "Validation still FAILED after %d retries — "
+            "pipeline will score and then save_node will reject this run.",
+            state.max_validation_retries,
+        )
     return "score"
 
 
@@ -1177,8 +1216,18 @@ def _count_by_source(articles: list[Article]) -> dict[str, int]:
     """Count articles per source."""
     counts: dict[str, int] = {}
     for a in articles:
-        counts[a.source] = counts.get(a.source, 0) + 1
+        source = _article_source_key(a)
+        counts[source] = counts.get(source, 0) + 1
     return counts
+
+
+def _article_source_key(article: Article) -> str:
+    source = (article.source or "").strip()
+    if source.lower().startswith("google news"):
+        headline, _separator, publisher = (article.title or "").rpartition(" - ")
+        if headline and publisher and len(publisher.strip()) <= 60:
+            return publisher.strip()
+    return source or "unknown"
 
 
 def _parse_predictions(analysis_text: str, tickers: list[str]) -> list[dict]:

@@ -20,11 +20,12 @@ import logging
 import threading
 import time as _time
 import random as _random
+from contextlib import contextmanager
 from dataclasses import dataclass
 from config.settings import (
     LLM_API_KEY, LLM_BASE_URL, REASONING_MODEL, FAST_MODEL, LLM_PROVIDER,
     LANGFUSE_ENABLED, LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY, LANGFUSE_HOST,
-    LLM_MAX_RETRIES, LLM_RETRY_BASE_DELAY,
+    LLM_MAX_CONCURRENCY, LLM_MAX_RETRIES, LLM_RETRY_BASE_DELAY,
 )
 
 # ── OpenAI client: auto-instrumented when Langfuse is configured ──
@@ -41,6 +42,10 @@ logger = logging.getLogger(__name__)
 
 # Timeout for LLM calls (seconds). Free-tier reasoning models can be slow.
 LLM_TIMEOUT = 180  # 3 minutes max per call
+
+# Global provider/GPU gate. Pipeline workers may be high so sector jobs can
+# queue in the background, but actual inference must respect the bottleneck.
+_llm_slots = threading.BoundedSemaphore(LLM_MAX_CONCURRENCY)
 
 
 # ── Graceful cancellation ──────────────────────────────────────────
@@ -76,6 +81,26 @@ def _check_cancelled():
     """Raise PipelineCancelled if stop was requested."""
     if _cancel_event.is_set():
         raise PipelineCancelled("Pipeline cancelled by user")
+
+
+@contextmanager
+def _llm_slot(model: str):
+    """Wait for one provider/GPU inference slot, with cancellation checks."""
+    waited = False
+    while not _llm_slots.acquire(timeout=1.0):
+        waited = True
+        _check_cancelled()
+        logger.info(
+            "Waiting for LLM slot (%s max concurrent calls via %s)...",
+            LLM_MAX_CONCURRENCY,
+            LLM_PROVIDER,
+        )
+    if waited:
+        logger.info("Acquired LLM slot for %s", model)
+    try:
+        yield
+    finally:
+        _llm_slots.release()
 
 # ── Langfuse setup ────────────────────────────────────────────────
 # When LANGFUSE_ENABLED=True the Langfuse OpenAI wrapper automatically
@@ -135,6 +160,74 @@ def _get_client() -> OpenAI:
                     timeout=LLM_TIMEOUT,
                 )
     return _client
+
+
+# ── Per-run credential override (browser-supplied keys) ───────────
+# Users may bring their own API key / base URL / model from the browser.
+# Those credentials are scoped to a single pipeline run via a thread-local:
+# the FastAPI runner sets them at the start of the worker thread that drives
+# the whole synchronous pipeline, so every LLM call on that thread uses them.
+# They are NEVER cached, persisted, or logged — when the run finishes the
+# thread-local is cleared, falling back to the server's env credentials.
+
+_cred_local = threading.local()
+
+
+@dataclass
+class _LLMCredentials:
+    api_key: str
+    base_url: str | None = None
+    model: str | None = None
+
+
+@contextmanager
+def llm_credentials_override(
+    api_key: str | None,
+    base_url: str | None = None,
+    model: str | None = None,
+):
+    """Scope browser-supplied LLM credentials to the current thread.
+
+    A blank/None api_key is a no-op (the server's env key is used instead),
+    so callers can pass through optional credentials unconditionally.
+    """
+    prev = getattr(_cred_local, "creds", None)
+    if api_key and api_key.strip():
+        _cred_local.creds = _LLMCredentials(
+            api_key=api_key.strip(),
+            base_url=(base_url or "").strip() or LLM_BASE_URL,
+            model=(model or "").strip() or None,
+        )
+    else:
+        _cred_local.creds = None
+    try:
+        yield
+    finally:
+        _cred_local.creds = prev
+
+
+def _active_creds() -> "_LLMCredentials | None":
+    return getattr(_cred_local, "creds", None)
+
+
+def _active_client() -> OpenAI:
+    """Return the client for the current call — a transient per-key client when
+    a browser credential override is active, otherwise the shared singleton."""
+    creds = _active_creds()
+    if creds and creds.api_key:
+        return OpenAI(
+            api_key=creds.api_key,
+            base_url=creds.base_url or LLM_BASE_URL,
+            timeout=LLM_TIMEOUT,
+        )
+    return _get_client()
+
+
+def _forced_model() -> str | None:
+    """The override model to use when the user brought their own credentials."""
+    creds = _active_creds()
+    return creds.model if creds else None
+
 
 
 # ── Retryable exceptions ──────────────────────────────────────────
@@ -212,21 +305,23 @@ def check_llm_health(timeout: int = 15) -> bool:
         # tokens" from the max_tokens budget before producing visible output.
         # A trivial prompt may use ~70-100 reasoning tokens, so we need
         # max_tokens >> expected content length.
-        response = client.chat.completions.create(
-            model=FAST_MODEL,
-            messages=[{"role": "user", "content": "Reply with exactly: OK"}],
-            max_tokens=300,
-            temperature=0,
-        )
+        with _llm_slot(FAST_MODEL):
+            response = client.chat.completions.create(
+                model=FAST_MODEL,
+                messages=[{"role": "user", "content": "Reply with exactly: OK"}],
+                max_tokens=300,
+                temperature=0,
+            )
         content = (response.choices[0].message.content or "").strip()
         if not content:
             # One retry — sometimes the model needs a nudge
-            response = client.chat.completions.create(
-                model=FAST_MODEL,
-                messages=[{"role": "user", "content": "Say hello"}],
-                max_tokens=500,
-                temperature=0.5,
-            )
+            with _llm_slot(FAST_MODEL):
+                response = client.chat.completions.create(
+                    model=FAST_MODEL,
+                    messages=[{"role": "user", "content": "Say hello"}],
+                    max_tokens=500,
+                    temperature=0.5,
+                )
             content = (response.choices[0].message.content or "").strip()
         if not content:
             raise LLMHealthCheckError(
@@ -279,8 +374,8 @@ def call_llm(
         On error, raises an exception instead of silently returning
         an error string (which would get saved as the "analysis").
     """
-    client = _get_client()
-    model = model or REASONING_MODEL
+    client = _active_client()
+    model = model or _forced_model() or REASONING_MODEL
 
     messages = []
     if system_prompt:
@@ -303,13 +398,14 @@ def call_llm(
         _check_cancelled()  # bail out before making the API call
         try:
             logger.info("Calling %s...%s", model, f" (retry {attempt})" if attempt else "")
-            response = client.chat.completions.create(
-                model=model,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                **lf_kwargs,
-            )
+            with _llm_slot(model):
+                response = client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    **lf_kwargs,
+                )
             _check_cancelled()  # bail out if cancelled while waiting
             # Guard against None choices (some models / Langfuse wrapper)
             if not response.choices:
@@ -359,8 +455,8 @@ def call_llm_with_metadata(
     Langfuse kwargs (optional):
         langfuse_name, langfuse_metadata, langfuse_trace_id
     """
-    client = _get_client()
-    model = model or REASONING_MODEL
+    client = _active_client()
+    model = model or _forced_model() or REASONING_MODEL
 
     messages = []
     if system_prompt:
@@ -382,13 +478,14 @@ def call_llm_with_metadata(
         try:
             logger.info("Calling %s (%s) [with metadata]...%s", model, LLM_PROVIDER,
                         f" (retry {attempt})" if attempt else "")
-            response = client.chat.completions.create(
-                model=model,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                **lf_kwargs,
-            )
+            with _llm_slot(model):
+                response = client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    **lf_kwargs,
+                )
             _check_cancelled()
             content = response.choices[0].message.content or ""
             prompt_tokens = response.usage.prompt_tokens if response.usage else 0
@@ -429,6 +526,8 @@ def call_llm_fast(
     prompt: str,
     system_prompt: str = "",
     *,
+    temperature: float = 0.1,
+    max_tokens: int = 2048,
     langfuse_name: str | None = None,
     langfuse_metadata: dict | None = None,
     langfuse_trace_id: str | None = None,
@@ -440,9 +539,9 @@ def call_llm_fast(
     return call_llm(
         prompt=prompt,
         system_prompt=system_prompt,
-        model=FAST_MODEL,
-        temperature=0.1,
-        max_tokens=2048,
+        model=_forced_model() or FAST_MODEL,
+        temperature=temperature,
+        max_tokens=max_tokens,
         langfuse_name=langfuse_name,
         langfuse_metadata=langfuse_metadata,
         langfuse_trace_id=langfuse_trace_id,

@@ -20,10 +20,12 @@ import pytest_asyncio
 from sqlalchemy import insert, text
 from sqlalchemy.ext.asyncio import AsyncConnection
 
+from app.db.repositories import agents as agent_repo
 from app.db.repositories import predictions as pred_repo
 from app.db.repositories import reports as report_repo
 from app.db.repositories import signals as signal_repo
 from app.db.repositories import users as user_repo
+from app.db.repositories import chief_verdicts as verdict_repo
 from app.db.tables import pipeline_runs, predictions, reports, signal_cards
 from app.schemas.reports import PredictionSchema
 
@@ -85,6 +87,74 @@ async def _insert_prediction(db: AsyncConnection, **overrides) -> int:
 
 
 # ══════════════════════════════════════════════════════════════════
+# Agents repository
+# ══════════════════════════════════════════════════════════════════
+
+class TestAgentsRepository:
+    @pytest.mark.asyncio
+    async def test_ensure_builtin_agents_seeds_catalog(self, db):
+        await agent_repo.ensure_builtin_agents(db)
+        rows = (await db.execute(text("SELECT name FROM agents ORDER BY id"))).all()
+        names = [row[0] for row in rows]
+        assert names == [
+            "Supply Chain Analyst",
+            "Value Analyst",
+            "Momentum Analyst",
+            "Risk Analyst",
+        ]
+
+    @pytest.mark.asyncio
+    async def test_ensure_builtin_agents_is_idempotent(self, db):
+        await agent_repo.ensure_builtin_agents(db)
+        await agent_repo.ensure_builtin_agents(db)
+        total = (await db.execute(text("SELECT COUNT(*) FROM agents"))).scalar_one()
+        assert total == 4
+
+    @pytest.mark.asyncio
+    async def test_get_agent_for_run_defaults_to_supply_chain(self, db):
+        agent = await agent_repo.get_agent_for_run(db, None)
+        assert agent is not None
+        assert agent.name == "Supply Chain Analyst"
+        assert agent.identity_layer
+
+    @pytest.mark.asyncio
+    async def test_get_agent_for_run_unknown_returns_none(self, db):
+        agent = await agent_repo.get_agent_for_run(db, 9999)
+        assert agent is None
+
+    @pytest.mark.asyncio
+    async def test_list_agents_omits_identity_layer(self, db):
+        items = await agent_repo.list_agents(db)
+        assert len(items) == 4
+        assert not hasattr(items[0], "identity_layer")
+
+    @pytest.mark.asyncio
+    async def test_create_agent_with_skill_persists_custom_runtime_prompt(self, db):
+        agent = await agent_repo.create_agent_with_skill(
+            db,
+            name="Options Flow Analyst",
+            description="Tracks volatility, flow, and dealer positioning.",
+            skill_name="Options Flow Skill",
+            skill_type="domain",
+            skill_content=(
+                "Focus on options volume, implied volatility term structure, dealer gamma, "
+                "and whether positioning changes the risk/reward for the next market move."
+            ),
+        )
+
+        assert agent.name == "Options Flow Analyst"
+        assert agent.is_builtin is False
+
+        skill_count = (await db.execute(text("SELECT COUNT(*) FROM skills WHERE agent_id = :agent_id"), {"agent_id": agent.id})).scalar_one()
+        assert skill_count == 1
+
+        runtime = await agent_repo.get_agent(db, agent.id)
+        assert runtime is not None
+        assert "Options Flow Skill" in runtime.identity_layer
+        assert "dealer gamma" in runtime.identity_layer
+
+
+# ══════════════════════════════════════════════════════════════════
 # Reports repository
 # ══════════════════════════════════════════════════════════════════
 
@@ -110,6 +180,21 @@ class TestReportsRepository:
         items, total = await report_repo.list_reports(db, sector_id="space_rockets")
         assert total == 1
         assert items[0].sector_id == "space_rockets"
+
+    @pytest.mark.asyncio
+    async def test_list_reports_filters_by_market(self, db):
+        await _insert_report(db, sector_id="us_technology", sector_name="US Tech")
+        await _insert_report(db, sector_id="hk_tech", sector_name="HK Tech")
+        await _insert_report(db, sector_id="ai_semiconductors", sector_name="Legacy")
+
+        hk_items, hk_total = await report_repo.list_reports(db, market="hk")
+        assert hk_total == 1
+        assert hk_items[0].sector_id == "hk_tech"
+
+        # US view includes legacy (non-prefixed) sector ids, excludes hk_*
+        us_items, us_total = await report_repo.list_reports(db, market="us")
+        assert us_total == 2
+        assert all(not r.sector_id.startswith("hk_") for r in us_items)
 
     @pytest.mark.asyncio
     async def test_list_reports_pagination(self, db):
@@ -196,6 +281,44 @@ class TestSignalsRepository_Runs:
         run = await signal_repo.get_run(db, "run-004")
         assert run.status == "failed"
         assert run.error == "LLM timeout"
+
+    @pytest.mark.asyncio
+    async def test_terminal_run_status_cannot_be_overwritten_by_late_running_update(self, db):
+        await signal_repo.create_run(db, "run-terminal", "NVDA", "ai_semiconductors")
+        await signal_repo.update_run_status(
+            db,
+            "run-terminal",
+            status="failed",
+            current_node="summarize",
+            error="LLM provider quota exceeded",
+        )
+        await signal_repo.update_run_status(
+            db,
+            "run-terminal",
+            status="running",
+            current_node="summarize",
+        )
+
+        run = await signal_repo.get_run(db, "run-terminal")
+        assert run.status == "failed"
+        assert run.current_node == "summarize"
+        assert run.error == "LLM provider quota exceeded"
+
+    @pytest.mark.asyncio
+    async def test_list_runs_treats_errored_running_rows_as_failed(self, db):
+        await signal_repo.create_run(db, "run-legacy-error", "NVDA", "ai_semiconductors")
+        await signal_repo.update_run_status(
+            db,
+            "run-legacy-error",
+            status="running",
+            current_node="summarize",
+            error="LLM provider quota exceeded",
+        )
+
+        items, total = await signal_repo.list_runs(db, ticker="NVDA")
+        assert total == 1
+        assert items[0].status == "failed"
+        assert items[0].error == "LLM provider quota exceeded"
 
     @pytest.mark.asyncio
     async def test_list_runs_empty(self, db):
@@ -328,6 +451,28 @@ class TestSignalsRepository_Cards:
         items, total = await signal_repo.list_signal_cards(db, page=1, page_size=3)
         assert total == 5
         assert len(items) == 3
+
+    @pytest.mark.asyncio
+    async def test_list_signal_cards_filter_by_market(self, db):
+        await signal_repo.create_signal_card(
+            db, ticker="NVDA", signal="BULLISH",
+            conviction=4, one_line="US name", confidence=0.8,
+        )
+        await signal_repo.create_signal_card(
+            db, ticker="0700.HK", signal="BULLISH",
+            conviction=4, one_line="HK name", confidence=0.8,
+        )
+
+        hk_items, hk_total = await signal_repo.list_signal_cards(db, market="hk")
+        assert hk_total == 1
+        assert hk_items[0].ticker == "0700.HK"
+
+        us_items, us_total = await signal_repo.list_signal_cards(db, market="us")
+        assert us_total == 1
+        assert us_items[0].ticker == "NVDA"
+
+        _, all_total = await signal_repo.list_signal_cards(db)
+        assert all_total == 2
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -556,6 +701,42 @@ class TestUserScoping:
         items, total = await signal_repo.list_runs(db, user_email="alice@example.com")
         assert total == 1
         assert items[0].ticker == "NVDA"
+
+
+# ══════════════════════════════════════════════════════════════════
+# Chief verdicts — market scoping for the House Call accuracy panel
+# ══════════════════════════════════════════════════════════════════
+
+class TestChiefVerdictMarketScope:
+    @staticmethod
+    async def _seed(db, ticker: str) -> None:
+        await verdict_repo.create(
+            db,
+            {
+                "ticker": ticker,
+                "action": "BUY",
+                "conviction": 4,
+                "deciding_reason": "test",
+                "summary": "test",
+                "analyst_count": 1,
+            },
+        )
+
+    @pytest.mark.asyncio
+    async def test_get_accuracy_filters_by_market(self, db):
+        await self._seed(db, "NVDA")
+        await self._seed(db, "0700.HK")
+
+        hk = await verdict_repo.get_accuracy(db, market="hk")
+        assert hk.total == 1
+        assert hk.recent[0].ticker == "0700.HK"
+
+        us = await verdict_repo.get_accuracy(db, market="us")
+        assert us.total == 1
+        assert us.recent[0].ticker == "NVDA"
+
+        every = await verdict_repo.get_accuracy(db)
+        assert every.total == 2
 
 
 # ══════════════════════════════════════════════════════════════════

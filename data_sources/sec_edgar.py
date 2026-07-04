@@ -168,7 +168,8 @@ def _lookup_cik(ticker: str) -> tuple[str, str] | None:
 
         return _cik_cache.get(ticker_upper)
 
-    except Exception:
+    except Exception as e:
+        logger.warning("CIK lookup failed for %s: %s", ticker_upper, e)
         return None
 
 

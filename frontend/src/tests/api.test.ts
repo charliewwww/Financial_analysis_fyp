@@ -7,6 +7,9 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  ApiError,
+  askSignalEvidence,
+  createAgentSkill,
   fetchAccuracyStats,
   fetchMe,
   fetchReport,
@@ -19,7 +22,9 @@ import {
   fetchSignals,
   fetchLatestSignal,
   sseStreamUrl,
+  triggerBoardRun,
   triggerRun,
+  triggerSectorBoardRun,
   updateMe,
 } from "@/lib/api";
 
@@ -118,6 +123,18 @@ describe("fetchSignalPredictions", () => {
   });
 });
 
+describe("askSignalEvidence", () => {
+  it("posts a question to /signals/{id}/chat", async () => {
+    mockOk({ answer: "Demand rose.", citations: [], limitations: [], grounded: true, suggested_questions: [] });
+    const result = await askSignalEvidence(7, { question: "What changed?" });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(`${BASE}/signals/7/chat`);
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body as string)).toEqual({ question: "What changed?" });
+    expect(result.answer).toBe("Demand rose.");
+  });
+});
+
 // ── Reports ───────────────────────────────────────────────────────────────────
 
 describe("fetchReports", () => {
@@ -170,6 +187,62 @@ describe("triggerRun", () => {
   });
 });
 
+describe("triggerBoardRun", () => {
+  it("sends POST to /pipeline/runs/fanout", async () => {
+    mockOk({ ticker: "NVDA", sector_id: "ai_semiconductors", dry_run: false, runs: [] });
+    const result = await triggerBoardRun({ ticker: "NVDA" });
+    expect(fetchMock.mock.calls[0][0]).toBe(`${BASE}/pipeline/runs/fanout`);
+    expect(fetchMock.mock.calls[0][1].method).toBe("POST");
+    expect(result.ticker).toBe("NVDA");
+  });
+
+  it("sends optional agent ids as JSON", async () => {
+    mockOk({ ticker: "NVDA", sector_id: "ai_semiconductors", dry_run: false, runs: [] });
+    await triggerBoardRun({ ticker: "NVDA", agent_ids: [1, 2] });
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(body.agent_ids).toEqual([1, 2]);
+  });
+});
+
+describe("triggerSectorBoardRun", () => {
+  it("sends POST to /pipeline/runs/sector-fanout", async () => {
+    mockOk([]);
+    const result = await triggerSectorBoardRun({ sector_id: "ai_semiconductors", tickers: ["NVDA", "AMD"] });
+    expect(fetchMock.mock.calls[0][0]).toBe(`${BASE}/pipeline/runs/sector-fanout`);
+    expect(fetchMock.mock.calls[0][1].method).toBe("POST");
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(body.sector_id).toBe("ai_semiconductors");
+    expect(body.tickers).toEqual(["NVDA", "AMD"]);
+    expect(result).toEqual([]);
+  });
+});
+
+describe("createAgentSkill", () => {
+  it("sends POST to /agents", async () => {
+    mockOk({
+      id: 5,
+      name: "Options Flow Analyst",
+      description: "Tracks flow",
+      is_builtin: false,
+      created_at: "2026-05-29T00:00:00Z",
+      updated_at: null,
+    });
+
+    const result = await createAgentSkill({
+      name: "Options Flow Analyst",
+      description: "Tracks flow",
+      skill_content: "Focus on options flow, implied volatility, dealer gamma, and positioning changes.",
+    });
+
+    expect(fetchMock.mock.calls[0][0]).toBe(`${BASE}/agents`);
+    expect(fetchMock.mock.calls[0][1].method).toBe("POST");
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(body.name).toBe("Options Flow Analyst");
+    expect(body.skill_content).toContain("dealer gamma");
+    expect(result.is_builtin).toBe(false);
+  });
+});
+
 describe("fetchRuns", () => {
   it("calls /pipeline/runs with no params", async () => {
     mockOk({ items: [], total: 0, page: 1, page_size: 20 });
@@ -204,14 +277,23 @@ describe("sseStreamUrl", () => {
 // ── Error handling ─────────────────────────────────────────────────────────────
 
 describe("apiFetch error handling", () => {
-  it("throws on non-ok response", async () => {
+  it("throws an ApiError carrying the non-ok status", async () => {
     mockFail(404, "Not Found");
-    await expect(fetchSignalCard(999)).rejects.toThrow("404");
+    await expect(fetchSignalCard(999)).rejects.toBeInstanceOf(ApiError);
+
+    mockFail(404, "Not Found");
+    await expect(fetchSignalCard(999)).rejects.toMatchObject({
+      name: "ApiError",
+      status: 404,
+    });
   });
 
-  it("throws on 500 with server error text", async () => {
+  it("throws an ApiError carrying the 500 status", async () => {
     mockFail(500, "Internal Server Error");
-    await expect(fetchReport(1)).rejects.toThrow("500");
+    await expect(fetchReport(1)).rejects.toMatchObject({
+      name: "ApiError",
+      status: 500,
+    });
   });
 });
 

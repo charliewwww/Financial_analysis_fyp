@@ -1,0 +1,244 @@
+/* MarketPulse design layer.
+   Ported from ui/styles.py and ui/components.py so the Next.js shell keeps
+   the same visual hierarchy as the original Streamlit app. */
+
+:root {
+  --al-gold: #b8860b;
+  --al-gold-light: #d4af37;
+  --al-gold-container: #fef3c7;
+  --al-gold-on: #ffffff;
+
+  --al-surface: #f8fafc;
+  --al-surface-card: rgba(255, 255, 255, 0.82);
+  --al-surface-elevated: #ffffff;
+  --al-on-surface: #0f172a;
+  --al-on-surface-muted: #64748b;
+  --al-outline: #e2e8f0;
+  --al-hover: rgba(0, 0, 0, 0.03);
+
+  --al-green-bg: #dcfce7;
+  --al-green-fg: #166534;
+  --al-green-bold: #16a34a;
+  --al-amber-bg: #fef3c7;
+  --al-amber-fg: #78350f;
+  --al-amber-bold: #d97706;
+  --al-red-bg: #fee2e2;
+  --al-red-fg: #991b1b;
+  --al-red-bold: #dc2626;
+  --al-gray-bg: #f1f5f9;
+  --al-gray-fg: #64748b;
+
+  --al-sector-ai: #5c9ce6;
+  --al-sector-space: #9575cd;
+  --al-sector-optical: #b8860b;
+
+  --al-bullish: #16a34a;
+  --al-bearish: #dc2626;
+  --al-neutral: #64748b;
+
+  --al-shadow-premium: 0 20px 50px rgba(0, 0, 0, 0.05);
+  --al-shadow-glass: 0 8px 32px 0 rgba(31, 38, 135, 0.04);
+  --al-shadow-gold: 0 10px 30px rgba(184, 134, 11, 0.20);
+  --al-shadow-gold-hi: 0 15px 40px rgba(184, 134, 11, 0.30);
+
+  --al-radius-card: 1.25rem;
+  --al-radius-pill: 9999px;
+  --al-radius-chip: 0.85rem;
+  --al-bar-track: #f1f5f9;
+}
+
+.dark {
+  --al-gold: #d4af37;
+  --al-gold-light: #e8c84a;
+  --al-gold-container: #3d2e06;
+  --al-gold-on: #1a1305;
+
+  --al-surface: #0f172a;
+  --al-surface-card: rgba(30, 41, 59, 0.82);
+  --al-surface-elevated: #1e293b;
+  --al-on-surface: #e2e8f0;
+  --al-on-surface-muted: #94a3b8;
+  --al-outline: #334155;
+  --al-hover: rgba(255, 255, 255, 0.05);
+
+  --al-green-bg: rgba(34, 197, 94, 0.15);
+  --al-green-fg: #86efac;
+  --al-green-bold: #22c55e;
+  --al-amber-bg: rgba(217, 119, 6, 0.18);
+  --al-amber-fg: #fcd34d;
+  --al-amber-bold: #f59e0b;
+  --al-red-bg: rgba(239, 68, 68, 0.15);
+  --al-red-fg: #fca5a5;
+  --al-red-bold: #ef4444;
+  --al-gray-bg: rgba(148, 163, 184, 0.12);
+  --al-gray-fg: #94a3b8;
+
+  --al-bullish: #22c55e;
+  --al-bearish: #ef4444;
+  --al-neutral: #94a3b8;
+
+  --al-shadow-premium: 0 20px 50px rgba(0, 0, 0, 0.30);
+  --al-shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.20);
+  --al-shadow-gold: 0 10px 30px rgba(212, 175, 55, 0.25);
+  --al-shadow-gold-hi: 0 15px 40px rgba(212, 175, 55, 0.35);
+  --al-bar-track: #1e293b;
+}
+
+@layer components {
+  .al-glass {
+    background: var(--al-surface-card);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--al-outline);
+    border-radius: var(--al-radius-card);
+    box-shadow: var(--al-shadow-premium);
+  }
+
+  .al-gold-gradient {
+    background: linear-gradient(135deg, var(--al-gold) 0%, var(--al-gold-light) 100%);
+    color: var(--al-gold-on);
+    box-shadow: var(--al-shadow-gold);
+    transition: box-shadow 200ms ease, transform 200ms ease;
+  }
+
+  .al-gold-gradient:hover {
+    box-shadow: var(--al-shadow-gold-hi);
+    transform: translateY(-1px);
+  }
+
+  .al-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 3px 12px;
+    border-radius: var(--al-radius-pill);
+    font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: lowercase;
+    line-height: 1.4;
+    white-space: nowrap;
+  }
+
+  .al-pill[data-variant="green"] { background: var(--al-green-bg); color: var(--al-green-fg); }
+  .al-pill[data-variant="amber"] { background: var(--al-amber-bg); color: var(--al-amber-fg); }
+  .al-pill[data-variant="red"] { background: var(--al-red-bg); color: var(--al-red-fg); }
+  .al-pill[data-variant="gray"] { background: var(--al-gray-bg); color: var(--al-gray-fg); }
+  .al-pill[data-variant="gold"] {
+    background: var(--al-gold-container);
+    color: var(--al-gold);
+    border: 1px solid color-mix(in srgb, var(--al-gold) 25%, transparent);
+  }
+
+  .al-sector-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 9999px;
+    box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 15%, transparent);
+  }
+
+  .al-sector-dot[data-sector="ai"] { color: var(--al-sector-ai); background: var(--al-sector-ai); }
+  .al-sector-dot[data-sector="space"] { color: var(--al-sector-space); background: var(--al-sector-space); }
+  .al-sector-dot[data-sector="optical"] { color: var(--al-sector-optical); background: var(--al-sector-optical); }
+  .al-sector-dot[data-sector="unknown"] { color: var(--al-on-surface-muted); background: var(--al-on-surface-muted); }
+
+  .al-metric-chip {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 0.55rem 0.9rem;
+    border-radius: var(--al-radius-chip);
+    background: var(--al-surface-card);
+    border: 1px solid var(--al-outline);
+    min-width: 100px;
+  }
+
+  .al-metric-chip-label {
+    font-size: 0.625rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--al-on-surface-muted);
+  }
+
+  .al-metric-chip-value {
+    font-family: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
+    font-weight: 800;
+    font-size: 1.1rem;
+    color: var(--al-on-surface);
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .al-metric-chip-sub {
+    font-size: 0.65rem;
+    color: var(--al-on-surface-muted);
+  }
+
+  .al-section-title {
+    font-family: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    color: var(--al-on-surface);
+  }
+
+  .al-eyebrow {
+    font-size: 0.65rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--al-on-surface-muted);
+  }
+
+  .al-thesis-banner {
+    border-left: 4px solid var(--al-gold);
+    background: linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--al-gold) 6%, transparent) 0%,
+      color-mix(in srgb, var(--al-gold-light) 4%, transparent) 100%
+    );
+    border-radius: 0 var(--al-radius-card) var(--al-radius-card) 0;
+    padding: 1.25rem 1.5rem;
+  }
+
+  .al-thesis-banner-label {
+    font-size: 0.625rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--al-gold);
+    margin-bottom: 0.4rem;
+  }
+
+  .al-thesis-banner-text {
+    font-family: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
+    font-weight: 700;
+    font-size: 1.1rem;
+    line-height: 1.5;
+    letter-spacing: -0.01em;
+    color: var(--al-on-surface);
+  }
+
+  .bar-track {
+    width: 100%;
+    height: 8px;
+    overflow: hidden;
+    border-radius: 9999px;
+    background: var(--al-bar-track);
+  }
+
+  .bar-fill {
+    height: 100%;
+    border-radius: inherit;
+    background: var(--al-gold);
+    transition: width 300ms ease;
+  }
+
+  .bar-ai { background: var(--al-sector-ai); }
+  .bar-space { background: var(--al-sector-space); }
+  .bar-optical { background: var(--al-sector-optical); }
+  .bar-bullish { background: var(--al-bullish); }
+  .bar-bearish { background: var(--al-bearish); }
+}

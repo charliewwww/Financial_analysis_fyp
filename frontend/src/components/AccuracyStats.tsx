@@ -92,7 +92,7 @@ export function AccuracyStatsDisplay({ stats }: AccuracyStatsDisplayProps) {
                     <TableCell className="text-right">{breakdown.total}</TableCell>
                     <TableCell className="text-right">{breakdown.correct}</TableCell>
                     <TableCell className="text-right font-medium">
-                      {breakdown.accuracy_pct.toFixed(1)}%
+                      {breakdown.accuracy_pct == null ? "—" : `${breakdown.accuracy_pct.toFixed(1)}%`}
                     </TableCell>
                   </TableRow>
                 ))}

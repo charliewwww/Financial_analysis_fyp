@@ -87,6 +87,8 @@ class Article:
     relevance_tag: str = ""                 # Why it matched: "ticker:NVDA" or "keywords:ai+semiconductor"
     relevance_score: float = 0.0            # Numeric relevance (for future ranking)
     used_in_analysis: bool = True           # Whether the Reflect node kept it
+    publisher_url: str = ""                 # Publisher homepage when source is an aggregator feed
+    aggregator: str = ""                    # Aggregator feed name, e.g. Google News (NVDA)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -112,6 +114,10 @@ class PipelineState:
     sector_tickers: list[str] = field(default_factory=list)
     sector_keywords: list[str] = field(default_factory=list)
     sector_supply_chain_map: dict = field(default_factory=dict)
+    agent_id: int | None = None
+    agent_name: str = "Supply Chain Analyst"
+    agent_identity: str = ""
+    model_override: str = ""                # Per-run reasoning-model override (empty = use default)
     run_id: str = ""                        # Unique identifier for this pipeline run
     created_at: str = ""                    # ISO timestamp when pipeline started
 
@@ -180,6 +186,8 @@ class PipelineState:
         """Convert entire state to a JSON-serializable dict."""
         d = {}
         for k, v in self.__dict__.items():
+            if k == "agent_identity":
+                continue
             if isinstance(v, list) and v and hasattr(v[0], 'to_dict'):
                 d[k] = [item.to_dict() if hasattr(item, 'to_dict') else item for item in v]
             elif hasattr(v, 'to_dict'):

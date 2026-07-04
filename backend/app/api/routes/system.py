@@ -6,33 +6,47 @@ from __future__ import annotations
 
 import os
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
+from app.core.auth import require_admin
 from app.core.config import settings
+from app.core.models_catalog import list_model_options
 from app.pipeline import runner as _runner  # noqa: F401 — sys.path patch
 
-router = APIRouter(tags=["system"])
+# Operator/system info is admin-only — enforced server-side, not just in the UI.
+router = APIRouter(tags=["system"], dependencies=[Depends(require_admin)])
 
 
 def _chromadb_doc_count() -> int:
-    """Best-effort count of documents in the legacy Chroma store.
+    """Best-effort count of documents in the Chroma store.
     Returns 0 if Chroma is unavailable or empty."""
     try:
-        from vectordb.chroma_store import get_chroma_store  # type: ignore[import]
+        from vectordb.chroma_store import get_store_stats  # type: ignore[import]
 
-        store = get_chroma_store()
-        client = getattr(store, "client", None) or getattr(store, "_client", None)
-        if client is None:
+        stats = get_store_stats()
+        if not stats.get("available"):
             return 0
-        total = 0
-        for col in client.list_collections():
-            try:
-                total += col.count()
-            except Exception:
-                continue
-        return total
+        return int(stats.get("total_documents", 0) or 0)
     except Exception:
         return 0
+
+
+def _chromadb_collections() -> list[dict]:
+    """Best-effort per-collection document counts for the Chroma store."""
+    try:
+        from vectordb.chroma_store import get_store_stats  # type: ignore[import]
+
+        stats = get_store_stats()
+        if not stats.get("available"):
+            return []
+        collections: list[dict] = []
+        for name, info in (stats.get("collections") or {}).items():
+            if isinstance(info, dict) and "count" in info:
+                collections.append({"name": name, "count": int(info["count"])})
+        return collections
+    except Exception:
+        return []
+
 
 
 @router.get(
@@ -50,3 +64,36 @@ async def system_health() -> dict:
             settings.sec_edgar_email or os.environ.get("SEC_EDGAR_EMAIL")
         ),
     }
+
+
+@router.get(
+    "/system/vectordb",
+    summary="Vector store statistics",
+)
+async def system_vectordb() -> dict:
+    """Per-collection document counts in the vector store, so the Stocks
+    control panel can show how much news/evidence is currently indexed."""
+    collections = _chromadb_collections()
+    by_name = {c["name"]: c["count"] for c in collections}
+    # Friendly aliases for the collections the product cares about most.
+    news_count = by_name.get("news_articles", 0)
+    return {
+        "total_docs": sum(c["count"] for c in collections),
+        "news_articles": news_count,
+        "collections": collections,
+    }
+
+
+@router.get(
+    "/system/models",
+    summary="Curated model allow-list",
+)
+async def system_models() -> dict:
+    """The models a user may pick for the next pipeline run."""
+    options = list_model_options()
+    return {
+        "provider": settings.llm_provider,
+        "default": settings.reasoning_model,
+        "options": options,
+    }
+

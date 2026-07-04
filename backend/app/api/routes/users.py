@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from typing import Annotated
 
 from app.core.auth import CurrentUser
+from app.core.config import settings
 from app.db.engine import get_db
 from app.db.repositories import users as user_repo
 from app.schemas.users import UserDetailSchema, UserUpdateRequest
@@ -32,7 +33,13 @@ DB = Annotated[AsyncConnection, Depends(get_db)]
     ),
 )
 async def get_me(db: DB, user: CurrentUser) -> UserDetailSchema:
-    return await user_repo.get_or_create(db, user)
+    profile = await user_repo.get_or_create(db, user)
+    # Keep a bootstrap operator's stored role in sync with the config list, so
+    # the UI's admin surfaces match what the server will actually authorize.
+    if user in settings.bootstrap_admin_emails and profile.role != "admin":
+        await user_repo.set_role(db, user, "admin")
+        profile = await user_repo.get_or_create(db, user)
+    return profile
 
 
 @router.patch(

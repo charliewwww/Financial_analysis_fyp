@@ -161,6 +161,23 @@ class TestParseEntry:
         assert result["source"] == "TestFeed"
         assert result["link"] == "https://example.com"
 
+    def test_google_news_entry_uses_publisher_source(self):
+        """Google News fallback should not collapse all coverage into one source."""
+        from data_sources.rss_fetcher import _parse_entry
+
+        entry = MagicMock()
+        entry.title = "NVDA stock rises on AI demand - CNBC"
+        entry.summary = "<p>Nvidia shares moved higher.</p>"
+        entry.published_parsed = _RECENT_DATE
+        entry.link = "https://news.google.com/rss/articles/example"
+        entry.source = {"title": "CNBC", "href": "https://www.cnbc.com"}
+
+        result = _parse_entry(entry, "Google News (NVDA)")
+        assert result["title"] == "NVDA stock rises on AI demand"
+        assert result["source"] == "CNBC"
+        assert result["aggregator"] == "Google News (NVDA)"
+        assert result["source_url"] == "https://www.cnbc.com"
+
     def test_empty_title_returns_none(self):
         """Should return None for entries with no title."""
         from data_sources.rss_fetcher import _parse_entry

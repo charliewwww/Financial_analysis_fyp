@@ -402,6 +402,36 @@ class TestValidateNode:
         assert result.validation_retry_count == 1
 
     @patch("workflows.nodes.call_llm")
+    def test_llm_only_failure_after_retry_becomes_warning(self, mock_llm):
+        mock_llm.return_value = "VERDICT: FAILED\n❌ FLAW: Thesis needs stronger sourcing."
+        state = _sector_state(
+            analysis_text="NVDA trades at $130.00.",
+            prices=_FAKE_PRICES,
+            technicals=_FAKE_TECHNICALS,
+            validation_retry_count=1,
+            max_validation_retries=1,
+        )
+        result = validate_node(state)
+        assert result.validation_status == "PASSED WITH WARNINGS"
+        assert result.validation_retry_count == 2
+        assert any("publishing as warnings" in issue for issue in result.validation_issues)
+
+    @patch("workflows.nodes.call_llm")
+    def test_numeric_failure_after_retry_becomes_warning(self, mock_llm):
+        mock_llm.return_value = "VERDICT: FAILED\n⚠️ DISCREPANCY: Price is still wrong."
+        state = _sector_state(
+            analysis_text="NVDA trades at $999.00.",
+            prices=_FAKE_PRICES,
+            technicals=_FAKE_TECHNICALS,
+            validation_retry_count=1,
+            max_validation_retries=1,
+        )
+        result = validate_node(state)
+        assert result.validation_status == "PASSED WITH WARNINGS"
+        assert result.validation_retry_count == 2
+        assert any("publishing as warnings" in issue for issue in result.validation_issues)
+
+    @patch("workflows.nodes.call_llm")
     def test_validation_issues_collected(self, mock_llm):
         mock_llm.return_value = (
             "VERDICT: PASSED WITH WARNINGS\n"

@@ -7,14 +7,45 @@
  * state does not leak between tests.
  */
 
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { AccuracyStats, ReportSummary, SignalCard } from "@/types/api";
+import type { AccuracyStats, AgentSummary, ReportSummary, SignalCard } from "@/types/api";
 import React from "react";
+import { MarketProvider } from "@/lib/market-context";
+import { OvernightProvider } from "@/components/overnight/OvernightContext";
+
+vi.mock("@/lib/api", () => ({
+  askSignalEvidence: vi.fn(),
+  createAgentSkill: vi.fn(),
+  fetchAgents: vi.fn(),
+  fetchLatestSignal: vi.fn(),
+  fetchChiefVerdict: vi.fn(),
+  fetchChiefVerdictAccuracy: vi.fn(),
+  fetchWatchlist: vi.fn(),
+  addToWatchlist: vi.fn(),
+  removeFromWatchlist: vi.fn(),
+  fetchMarkets: vi.fn(),
+  fetchMarketSectorCatalog: vi.fn(),
+  fetchModelCatalog: vi.fn(),
+  fetchVectorDbStats: vi.fn(),
+  fetchSignalCard: vi.fn(),
+  fetchRun: vi.fn(),
+  fetchSectors: vi.fn(),
+  fetchSignals: vi.fn(),
+  fetchRuns: vi.fn(),
+  triggerBoardRun: vi.fn(),
+  triggerSectorBoardRun: vi.fn(),
+  triggerSectorSynthesis: vi.fn(),
+}));
+
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/",
+}));
 
 afterEach(() => {
   cleanup();
+  vi.clearAllMocks();
 });
 
 // ── Test helpers ──────────────────────────────────────────────────────────────
@@ -23,7 +54,13 @@ function wrapper({ children }: { children: React.ReactNode }) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
+  return (
+    <QueryClientProvider client={qc}>
+      <MarketProvider>
+        <OvernightProvider>{children}</OvernightProvider>
+      </MarketProvider>
+    </QueryClientProvider>
+  );
 }
 
 function renderWithQuery(ui: React.ReactElement) {
@@ -37,6 +74,7 @@ function makeCard(overrides: Partial<SignalCard> = {}): SignalCard {
     id: 1,
     ticker: "AAPL",
     run_id: null,
+    agent_id: 1,
     signal: "BULLISH",
     conviction: 4,
     one_line: "Strong earnings expected.",
@@ -44,6 +82,7 @@ function makeCard(overrides: Partial<SignalCard> = {}): SignalCard {
     key_risk: "Supply chain risk",
     confidence: 0.85,
     signal_type: "earnings",
+    conviction_stated: true,
     validation_score: "8/10",
     supply_chain_impact: [{ ticker: "TSM", direction: "▲", reason: "Chip demand" }],
     sources: [{ url: "https://example.com", title: "Reuters article", domain: "reuters.com" }],
@@ -82,6 +121,18 @@ function makeAccuracyStats(overrides: Partial<AccuracyStats> = {}): AccuracyStat
       earnings: { total: 10, correct: 7, accuracy_pct: 70.0 },
       macro: { total: 5, correct: 3, accuracy_pct: 60.0 },
     },
+    ...overrides,
+  };
+}
+
+function makeAgent(overrides: Partial<AgentSummary> = {}): AgentSummary {
+  return {
+    id: 1,
+    name: "Supply Chain Analyst",
+    description: "Supply chain lens",
+    is_builtin: true,
+    created_at: "2026-04-30T09:00:00Z",
+    updated_at: null,
     ...overrides,
   };
 }
@@ -130,10 +181,10 @@ describe("SignalCardItem", () => {
     expect(badge.className).toContain("amber");
   });
 
-  it("renders confidence percentage", async () => {
+  it("renders evidence percentage", async () => {
     const { SignalCardItem } = await import("@/components/SignalCard");
     render(<SignalCardItem card={makeCard({ confidence: 0.85 })} />);
-    expect(screen.getByText("85% conf.")).toBeInTheDocument();
+    expect(screen.getByText("85% evidence")).toBeInTheDocument();
   });
 
   it("links to the signal detail page", async () => {
@@ -175,10 +226,11 @@ describe("ReportTable", () => {
     expect(link).toHaveAttribute("href", "/reports/10");
   });
 
-  it("renders confidence score as percentage", async () => {
+  it("renders confidence score on the report scale", async () => {
     const { ReportTable } = await import("@/components/ReportTable");
     render(<ReportTable reports={[makeReportSummary({ confidence_score: 0.8 })]} />);
-    expect(screen.getByText("80%")).toBeInTheDocument();
+    // Rendered in both the desktop table and the mobile card stack.
+    expect(screen.getAllByText("8.0/10").length).toBeGreaterThan(0);
   });
 
   it("shows dash for null confidence_score", async () => {
@@ -191,13 +243,13 @@ describe("ReportTable", () => {
   it("renders validation_status badge", async () => {
     const { ReportTable } = await import("@/components/ReportTable");
     render(<ReportTable reports={[makeReportSummary({ validation_status: "passed" })]} />);
-    expect(screen.getByText("passed")).toBeInTheDocument();
+    expect(screen.getAllByText("passed").length).toBeGreaterThan(0);
   });
 
   it("renders news_used count", async () => {
     const { ReportTable } = await import("@/components/ReportTable");
     render(<ReportTable reports={[makeReportSummary({ news_used: 12 })]} />);
-    expect(screen.getByText("12")).toBeInTheDocument();
+    expect(screen.getAllByText("12").length).toBeGreaterThan(0);
   });
 
   it("renders multiple rows", async () => {
@@ -210,8 +262,76 @@ describe("ReportTable", () => {
         ]}
       />
     );
-    expect(screen.getByText("Technology")).toBeInTheDocument();
-    expect(screen.getByText("Energy")).toBeInTheDocument();
+    expect(screen.getAllByText("Technology").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Energy").length).toBeGreaterThan(0);
+  });
+});
+
+// ── AccuracyStatsDisplay ──────────────────────────────────────────────────────
+
+describe("SignalEvidenceChat", () => {
+  it("posts a suggested evidence question and renders the answer", async () => {
+    const api = await import("@/lib/api");
+    vi.mocked(api.askSignalEvidence).mockResolvedValue({
+      answer: "Demand rose according to the source pack.",
+      citations: [
+        {
+          label: "source: reuters.com",
+          source_type: "source",
+          source: "reuters.com",
+          url: "https://example.com",
+          quote: "Demand rose.",
+        },
+      ],
+      limitations: [],
+      grounded: true,
+      suggested_questions: ["What would invalidate this?"],
+    });
+
+    const { SignalEvidenceChat } = await import("@/components/SignalEvidenceChat");
+    renderWithQuery(<SignalEvidenceChat cardId={7} ticker="NVDA" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "What changed?" }));
+
+    await waitFor(() => {
+      expect(api.askSignalEvidence).toHaveBeenCalledWith(7, expect.objectContaining({ question: "What changed?" }));
+    });
+    expect(await screen.findByText("Demand rose according to the source pack.")).toBeInTheDocument();
+    expect(await screen.findByText("source: reuters.com")).toBeInTheDocument();
+  });
+
+  it("disables input when no card is selected", async () => {
+    const { SignalEvidenceChat } = await import("@/components/SignalEvidenceChat");
+    renderWithQuery(<SignalEvidenceChat cardId={null} />);
+    expect(screen.getByLabelText("Evidence question")).toBeDisabled();
+    expect(screen.getByText("A current signal card is needed before chat can answer from evidence.")).toBeInTheDocument();
+  });
+});
+
+describe("FloatingEvidenceChat", () => {
+  it("opens as a bottom-right chat dock and targets the latest ticker card", async () => {
+    const api = await import("@/lib/api");
+    vi.mocked(api.fetchLatestSignal).mockResolvedValue(makeCard({ id: 7, ticker: "NVDA" }));
+    vi.mocked(api.askSignalEvidence).mockResolvedValue({
+      answer: "The latest evidence is reviewable.",
+      citations: [],
+      limitations: [],
+      grounded: true,
+      suggested_questions: [],
+    });
+
+    const { FloatingEvidenceChat } = await import("@/components/FloatingEvidenceChat");
+    renderWithQuery(<FloatingEvidenceChat />);
+
+    fireEvent.click(screen.getByRole("button", { name: /open evidence chat/i }));
+    expect(await screen.findByText("Latest NVDA card")).toBeInTheDocument();
+    await waitFor(() => expect(api.fetchLatestSignal).toHaveBeenCalledWith("NVDA"));
+
+    fireEvent.click(await screen.findByRole("button", { name: "What changed?" }));
+    await waitFor(() => {
+      expect(api.askSignalEvidence).toHaveBeenCalledWith(7, expect.objectContaining({ question: "What changed?" }));
+    });
+    expect(await screen.findByText("The latest evidence is reviewable.")).toBeInTheDocument();
   });
 });
 
@@ -282,5 +402,323 @@ describe("AccuracyStatsDisplay", () => {
     render(<AccuracyStatsDisplay stats={empty} />);
     expect(screen.getByText("0.0%")).toBeInTheDocument();
     expect(screen.getByText("0/0 checked")).toBeInTheDocument();
+  });
+});
+
+// ── AgentGallery ─────────────────────────────────────────────────────────────
+
+describe("AgentGallery", () => {
+  it("creates a custom skill-backed agent", async () => {
+    const api = await import("@/lib/api");
+    vi.mocked(api.fetchAgents).mockResolvedValue([
+      makeAgent({ id: 1, name: "Supply Chain Analyst" }),
+    ]);
+    vi.mocked(api.createAgentSkill).mockResolvedValue(
+      makeAgent({ id: 5, name: "Options Flow Analyst", is_builtin: false })
+    );
+
+    const { AgentGallery } = await import("@/components/AgentGallery");
+    renderWithQuery(<AgentGallery />);
+
+    fireEvent.change(await screen.findByLabelText("Agent name"), {
+      target: { value: "Options Flow Analyst" },
+    });
+    fireEvent.change(screen.getByLabelText("Description"), {
+      target: { value: "Tracks volatility and dealer positioning." },
+    });
+    fireEvent.change(screen.getByLabelText("Skill instructions"), {
+      target: {
+        value: "Focus on options flow, implied volatility, dealer gamma, and positioning changes.",
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /create skill/i }));
+
+    await waitFor(() => expect(api.createAgentSkill).toHaveBeenCalledWith({
+      name: "Options Flow Analyst",
+      description: "Tracks volatility and dealer positioning.",
+      skill_name: "Options Flow Analyst Skill",
+      skill_type: "domain",
+      skill_content: "Focus on options flow, implied volatility, dealer gamma, and positioning changes.",
+    }));
+    expect(await screen.findByText("Skill agent created. It will join the next board run.")).toBeInTheDocument();
+  });
+});
+
+// ── TickerBoard ───────────────────────────────────────────────────────────────
+
+describe("TickerBoard", () => {
+  it("launches a board fanout for the current ticker", async () => {
+    const api = await import("@/lib/api");
+    vi.mocked(api.fetchAgents).mockResolvedValue([
+      makeAgent({ id: 1, name: "Supply Chain Analyst" }),
+      makeAgent({ id: 2, name: "Value Analyst", description: "Value lens" }),
+    ]);
+    vi.mocked(api.fetchSignals).mockResolvedValue({
+      items: [],
+      total: 0,
+      page: 1,
+      page_size: 50,
+    });
+    vi.mocked(api.fetchRuns).mockResolvedValue({
+      items: [],
+      total: 0,
+      page: 1,
+      page_size: 8,
+    });
+    vi.mocked(api.fetchSectors).mockResolvedValue([
+      { id: "ai_semiconductors", name: "AI Infrastructure", tickers: ["NVDA", "AMD"] },
+    ]);
+    vi.mocked(api.fetchRun).mockImplementation(async (runId: string) => ({
+      run_id: runId,
+      ticker: "NVDA",
+      sector_id: "ai_semiconductors",
+      status: "pending",
+      current_node: null,
+      error: null,
+      created_at: "2026-04-30T09:00:00Z",
+      started_at: null,
+      finished_at: null,
+      signal_card_id: null,
+      node_executions: [],
+    }));
+    vi.mocked(api.triggerBoardRun).mockResolvedValue({
+      ticker: "NVDA",
+      sector_id: "ai_semiconductors",
+      dry_run: false,
+      runs: [
+        { run_id: "r-1", agent_id: 1, agent_name: "Supply Chain Analyst", status: "pending" },
+        { run_id: "r-2", agent_id: 2, agent_name: "Value Analyst", status: "pending" },
+      ],
+    });
+
+    const { TickerBoard } = await import("@/components/TickerBoard");
+    renderWithQuery(<TickerBoard />);
+
+    const button = await screen.findByRole("button", { name: /run board/i });
+    await waitFor(() => expect(button).not.toBeDisabled());
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(api.triggerBoardRun).toHaveBeenCalledWith({ ticker: "NVDA" });
+    });
+    expect(await screen.findByText("Launched 2 analyst runs for NVDA.")).toBeInTheDocument();
+  });
+
+  it("launches sector mode through one synthesis request", async () => {
+    const api = await import("@/lib/api");
+    vi.mocked(api.fetchAgents).mockResolvedValue([
+      makeAgent({ id: 1, name: "Supply Chain Analyst" }),
+      makeAgent({ id: 2, name: "Value Analyst", description: "Value lens" }),
+    ]);
+    vi.mocked(api.fetchSignals).mockResolvedValue({
+      items: [],
+      total: 0,
+      page: 1,
+      page_size: 50,
+    });
+    vi.mocked(api.fetchRuns).mockResolvedValue({
+      items: [],
+      total: 0,
+      page: 1,
+      page_size: 8,
+    });
+    vi.mocked(api.fetchSectors).mockResolvedValue([
+      { id: "ai_semiconductors", name: "AI Infrastructure", tickers: ["NVDA", "AMD"] },
+    ]);
+    vi.mocked(api.fetchRun).mockImplementation(async (runId: string) => ({
+      run_id: runId,
+      ticker: runId.includes("amd") ? "AMD" : "NVDA",
+      sector_id: "ai_semiconductors",
+      status: "pending",
+      current_node: null,
+      error: null,
+      created_at: "2026-04-30T09:00:00Z",
+      started_at: null,
+      finished_at: null,
+      signal_card_id: null,
+      node_executions: [],
+    }));
+    vi.mocked(api.triggerSectorSynthesis).mockResolvedValue({
+      run_id: "sector-syn-1",
+      sector_id: "ai_semiconductors",
+      sector_label: "AI Infrastructure",
+      status: "pending",
+    });
+
+    vi.mocked(api.fetchMarketSectorCatalog).mockResolvedValue({
+      market: { id: "us", name: "United States", currency: "USD" },
+      sectors: [
+        {
+          id: "ai_semiconductors",
+          name: "AI Infrastructure",
+          instrument: "SOXX",
+          instrument_name: "Semiconductors",
+          constituents: ["NVDA", "AMD"],
+        },
+      ],
+    });
+
+    const { TickerBoard } = await import("@/components/TickerBoard");
+    renderWithQuery(<TickerBoard />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Sector" }));
+    const button = await screen.findByRole("button", { name: /run sector/i });
+    await waitFor(() => expect(button).not.toBeDisabled());
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(api.triggerSectorSynthesis).toHaveBeenCalledWith({
+        sector_id: "ai_semiconductors",
+        model: undefined,
+      });
+    });
+    expect(api.triggerBoardRun).not.toHaveBeenCalled();
+    expect(await screen.findByText(/Launched a sector synthesis for AI Infrastructure/i)).toBeInTheDocument();
+  });
+
+  it("shows active backend run progress after a refresh", async () => {
+    const api = await import("@/lib/api");
+    vi.mocked(api.fetchAgents).mockResolvedValue([
+      makeAgent({ id: 1, name: "Supply Chain Analyst" }),
+    ]);
+    vi.mocked(api.fetchSignals).mockResolvedValue({
+      items: [],
+      total: 0,
+      page: 1,
+      page_size: 50,
+    });
+    vi.mocked(api.fetchRuns).mockResolvedValue({
+      items: [
+        {
+          run_id: "active-run-1",
+          ticker: "NVDA",
+          sector_id: "ai_semiconductors",
+          status: "running",
+          created_at: "2026-05-25T09:00:00Z",
+          finished_at: null,
+          signal_card_id: null,
+        },
+      ],
+      total: 1,
+      page: 1,
+      page_size: 8,
+    });
+    vi.mocked(api.fetchSectors).mockResolvedValue([
+      { id: "ai_semiconductors", name: "AI Infrastructure", tickers: ["NVDA", "AMD"] },
+    ]);
+    vi.mocked(api.fetchRun).mockResolvedValue({
+      run_id: "active-run-1",
+      ticker: "NVDA",
+      sector_id: "ai_semiconductors",
+      status: "running",
+      current_node: "analyze",
+      error: null,
+      created_at: "2026-05-25T09:00:00Z",
+      started_at: "2026-05-25T09:01:00Z",
+      finished_at: null,
+      signal_card_id: null,
+      node_executions: [],
+    });
+
+    const { TickerBoard } = await import("@/components/TickerBoard");
+    renderWithQuery(<TickerBoard />);
+
+    expect(await screen.findByText("Analysis progress")).toBeInTheDocument();
+    expect(await screen.findByText("Pipeline blueprint")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getAllByText("Analyst reasoning").length).toBeGreaterThan(0));
+  });
+
+  it("explains provider quota failures in active run progress", async () => {
+    const api = await import("@/lib/api");
+    vi.mocked(api.fetchAgents).mockResolvedValue([
+      makeAgent({ id: 1, name: "Supply Chain Analyst" }),
+    ]);
+    vi.mocked(api.fetchSignals).mockResolvedValue({
+      items: [],
+      total: 0,
+      page: 1,
+      page_size: 50,
+    });
+    vi.mocked(api.fetchRuns).mockResolvedValue({
+      items: [],
+      total: 0,
+      page: 1,
+      page_size: 8,
+    });
+    vi.mocked(api.fetchSectors).mockResolvedValue([
+      { id: "ai_semiconductors", name: "AI Infrastructure", tickers: ["NVDA", "AMD"] },
+    ]);
+    vi.mocked(api.fetchRun).mockResolvedValue({
+      run_id: "failed-run-1",
+      ticker: "NVDA",
+      sector_id: "ai_semiconductors",
+      status: "failed",
+      current_node: "summarize",
+      error: "LLM call failed via openrouter: Error code: 403 - Key limit exceeded (total limit). Manage it using https://openrouter.ai/workspaces/default/keys/abc123",
+      created_at: "2026-05-25T09:00:00Z",
+      started_at: "2026-05-25T09:00:10Z",
+      finished_at: "2026-05-25T09:01:00Z",
+      signal_card_id: null,
+      node_executions: [],
+    });
+    vi.mocked(api.triggerBoardRun).mockResolvedValue({
+      ticker: "NVDA",
+      sector_id: "ai_semiconductors",
+      dry_run: false,
+      runs: [
+        { run_id: "failed-run-1", agent_id: 1, agent_name: "Supply Chain Analyst", status: "pending" },
+      ],
+    });
+
+    const { TickerBoard } = await import("@/components/TickerBoard");
+    renderWithQuery(<TickerBoard />);
+
+    const button = await screen.findByRole("button", { name: /run board/i });
+    await waitFor(() => expect(button).not.toBeDisabled());
+    fireEvent.click(button);
+
+    await waitFor(() => expect(screen.getAllByText(/LLM quota exceeded/i).length).toBeGreaterThan(0));
+    expect(screen.getAllByText(/current API key is out of credits/i).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/openrouter\.ai\/workspaces/i)).not.toBeInTheDocument();
+  });
+
+  it("does not pin historical failed rows as active progress", async () => {
+    const api = await import("@/lib/api");
+    vi.mocked(api.fetchAgents).mockResolvedValue([
+      makeAgent({ id: 1, name: "Supply Chain Analyst" }),
+    ]);
+    vi.mocked(api.fetchSignals).mockResolvedValue({
+      items: [],
+      total: 0,
+      page: 1,
+      page_size: 50,
+    });
+    vi.mocked(api.fetchRuns).mockResolvedValue({
+      items: [
+        {
+          run_id: "old-failed-run",
+          ticker: "NVDA",
+          sector_id: "ai_semiconductors",
+          status: "running",
+          created_at: "2026-05-25T09:00:00Z",
+          finished_at: "2026-05-25T09:01:00Z",
+          error: "LLM provider quota exceeded",
+          signal_card_id: null,
+        },
+      ],
+      total: 1,
+      page: 1,
+      page_size: 8,
+    });
+    vi.mocked(api.fetchSectors).mockResolvedValue([
+      { id: "ai_semiconductors", name: "AI Infrastructure", tickers: ["NVDA", "AMD"] },
+    ]);
+
+    const { TickerBoard } = await import("@/components/TickerBoard");
+    renderWithQuery(<TickerBoard />);
+
+    await waitFor(() => expect(api.fetchRuns).toHaveBeenCalled());
+    expect(screen.queryByText("Analysis progress")).not.toBeInTheDocument();
+    expect(api.fetchRun).not.toHaveBeenCalledWith("old-failed-run");
   });
 });

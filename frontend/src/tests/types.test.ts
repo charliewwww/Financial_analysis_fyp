@@ -15,9 +15,13 @@ import type {
   Prediction,
   ReportDetail,
   ReportSummary,
+  RunFanoutRequest,
+  RunFanoutResponse,
   RunRequest,
   RunSummary,
   SignalCard,
+  SignalChatRequest,
+  SignalChatResponse,
   SignalTypeBreakdown,
   SSEEvent,
   UserDetail,
@@ -31,6 +35,7 @@ function makeSignalCard(overrides: Partial<SignalCard> = {}): SignalCard {
     id: 1,
     ticker: "AAPL",
     run_id: null,
+    agent_id: 1,
     signal: "BULLISH",
     conviction: 4,
     one_line: "Strong earnings beat expected.",
@@ -38,6 +43,7 @@ function makeSignalCard(overrides: Partial<SignalCard> = {}): SignalCard {
     key_risk: "Supply chain disruption",
     confidence: 0.82,
     signal_type: "earnings",
+    conviction_stated: true,
     validation_score: "8/10",
     supply_chain_impact: null,
     sources: null,
@@ -124,6 +130,38 @@ describe("SignalCard", () => {
   });
 });
 
+describe("SignalChat", () => {
+  it("request carries question, history, and context", () => {
+    const req: SignalChatRequest = {
+      question: "Why is recommendation locked?",
+      context: "Recommendation allowed: no",
+      history: [{ role: "user", content: "What changed?" }],
+    };
+    expect(req.history?.[0].role).toBe("user");
+    expect(req.context).toContain("Recommendation");
+  });
+
+  it("response carries citations and limitations", () => {
+    const res: SignalChatResponse = {
+      answer: "The evidence points to demand acceleration.",
+      grounded: true,
+      citations: [
+        {
+          label: "source: reuters.com",
+          source_type: "source",
+          source: "reuters.com",
+          url: "https://example.com",
+          quote: "Demand accelerated.",
+        },
+      ],
+      limitations: ["No forward guidance in this card."],
+      suggested_questions: ["What would invalidate this?"],
+    };
+    expect(res.citations[0].label).toBe("source: reuters.com");
+    expect(res.limitations).toHaveLength(1);
+  });
+});
+
 // ── PipelineRun ───────────────────────────────────────────────────────────────
 
 describe("PipelineRun", () => {
@@ -206,6 +244,38 @@ describe("RunRequest", () => {
   });
 });
 
+// ── RunFanoutRequest / RunFanoutResponse ─────────────────────────────────────
+
+describe("RunFanoutRequest", () => {
+  it("only ticker is required", () => {
+    const req: RunFanoutRequest = { ticker: "NVDA" };
+    expect(req.sector_id).toBeUndefined();
+  });
+
+  it("accepts optional sector and agent ids", () => {
+    const req: RunFanoutRequest = {
+      ticker: "0700.HK",
+      sector_id: "hk_internet",
+      agent_ids: [1, 4],
+    };
+    expect(req.agent_ids).toEqual([1, 4]);
+  });
+});
+
+describe("RunFanoutResponse", () => {
+  it("contains launched analyst runs", () => {
+    const res: RunFanoutResponse = {
+      ticker: "NVDA",
+      sector_id: "ai_semiconductors",
+      dry_run: false,
+      runs: [
+        { run_id: "r-1", agent_id: 1, agent_name: "Supply Chain Analyst", status: "pending" },
+      ],
+    };
+    expect(res.runs[0].agent_name).toBe("Supply Chain Analyst");
+  });
+});
+
 // ── SSEEvent ──────────────────────────────────────────────────────────────────
 
 describe("SSEEvent", () => {
@@ -274,6 +344,11 @@ describe("ReportDetail", () => {
       validation: null,
       news_summary: "Markets up this week.",
       predictions: [],
+      prices_snapshot: [],
+      technicals_snapshot: [],
+      news_snapshot: [],
+      filings_snapshot: [],
+      timing_snapshot: {},
     };
     expect(rd.analysis).toBeTruthy();
     expect(rd.predictions).toHaveLength(0);
@@ -374,6 +449,10 @@ describe("UserDetail", () => {
       username: "Alice",
       saved_sectors: ["semiconductors", "ev_battery"],
       preferences: { email_digest: true, default_page_size: 20 },
+      role: "user",
+      status: "active",
+      picture: null,
+      last_login_at: "2026-04-30T00:00:00Z",
       created_at: "2026-01-01T00:00:00Z",
       updated_at: "2026-04-30T00:00:00Z",
     };
@@ -389,6 +468,10 @@ describe("UserDetail", () => {
       username: null,
       saved_sectors: [],
       preferences: {},
+      role: "user",
+      status: "active",
+      picture: null,
+      last_login_at: null,
       created_at: "2026-01-01T00:00:00Z",
       updated_at: null,
     };

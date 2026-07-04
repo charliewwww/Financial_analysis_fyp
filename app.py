@@ -7,7 +7,7 @@ Thin router — delegates to page modules in ui/ for all rendering.
 import streamlit as st
 
 st.set_page_config(
-    page_title="Alpha Lens",
+    page_title="MarketPulse",
     page_icon="🔍",
     layout="wide",
     initial_sidebar_state="expanded",
