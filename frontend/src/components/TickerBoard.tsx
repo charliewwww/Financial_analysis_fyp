@@ -1373,7 +1373,7 @@ function FirstRunGuide({
         <p className="text-sm leading-6" style={{ color: "var(--al-on-surface-muted)" }}>
           The Decision Desk stays empty until you run the board. Launch the analysts on{" "}
           <span className="font-mono font-semibold text-foreground">{ticker || "a ticker"}</span> and watch them
-          work in real time — it usually takes a minute or two.
+          work in real time — a full board usually takes about 5 minutes.
         </p>
         <div className="flex flex-wrap items-center gap-2 pt-1">
           <Button onClick={onRun} disabled={disabled} className="al-gold-gradient rounded-full px-5">
@@ -1407,14 +1407,15 @@ function FirstRunGuide({
   );
 }
 
-export function TickerBoard() {
+export function TickerBoard({ initialTicker }: { initialTicker?: string } = {}) {
   const queryClient = useQueryClient();
   const { market } = useMarket();
   const overnight = useOvernight();
   const [scope, setScope] = useState<"ticker" | "sector">("ticker");
   const [decisionMode, setDecisionMode] = useState<DecisionMode>("support");
-  const [draftTicker, setDraftTicker] = useState("NVDA");
-  const [ticker, setTicker] = useState("NVDA");
+  const seedTicker = initialTicker ? normalizeTicker(initialTicker) : "";
+  const [draftTicker, setDraftTicker] = useState(seedTicker || "NVDA");
+  const [ticker, setTicker] = useState(seedTicker || "NVDA");
   const [selectedSectorId, setSelectedSectorId] = useState(DEFAULT_SECTOR_ID);
   const [sectorFocusTicker, setSectorFocusTicker] = useState("NVDA");
   const [activeRuns, setActiveRuns] = useState<ActiveRunMeta[]>([]);

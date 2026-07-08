@@ -120,136 +120,6 @@ def extract_conviction(text: str) -> int:
     return 3
 
 
-def conviction_was_stated(text: str) -> bool:
-    """True when the analysis text explicitly states a conviction score.
-
-    Lets the UI distinguish a real "3/5" from the silent default fallback,
-    so we never present a fabricated conviction as if the model asserted it.
-    """
-    return _CONVICTION_RE.search(text or "") is not None
-
-
-# ── Signal-type classification (rule-based, deterministic) ─────────
-# Answers the product's headline question: "is this a real fundamental
-# shift, just media narrative, or only a technical setup?"  No LLM call —
-# fully transparent and auditable.
-
-_FUNDAMENTAL_KEYWORDS = (
-    "earnings", "revenue", "guidance", "margin", "eps", "profit",
-    "contract", "order", "backlog", "acquisition", "merger", "acquire",
-    "10-k", "10-q", "8-k", "sec filing", "annual report", "quarterly report",
-    "product launch", "fda", "approval", "approved", "dividend", "buyback",
-    "capex", "capacity", "supply agreement", "partnership", "deal signed",
-    "regulatory", "antitrust", "lawsuit", "settlement", "bankruptcy",
-    "shipment", "production", "balance sheet", "cash flow", "free cash flow",
-    "fundamental", "valuation", "book value", "debt", "outlook raised",
-)
-_TECHNICAL_KEYWORDS = (
-    "rsi", "macd", "moving average", "sma", "ema", "bollinger",
-    "overbought", "oversold", "support level", "resistance level",
-    "breakout", "breakdown", "momentum", "golden cross", "death cross",
-    "trendline", "price action", "volume spike", "consolidation",
-    "pullback", "uptrend", "downtrend", "chart pattern",
-)
-_MEDIA_KEYWORDS = (
-    "rumor", "rumour", "speculation", "speculative", "reportedly",
-    "sources say", "sentiment", "hype", "buzz", "social media", "reddit",
-    "headline", "narrative", "media coverage", "analyst note",
-    "price target", "upgrade", "downgrade", "rating", "initiated coverage",
-)
-
-
-def _has_technical_extreme(technicals: list[Any]) -> bool:
-    """True when a technical reading is at an actionable extreme."""
-    for t in technicals:
-        if not isinstance(t, dict):
-            continue
-        rsi = t.get("rsi_14")
-        try:
-            if rsi is not None and (float(rsi) >= 70 or float(rsi) <= 30):
-                return True
-        except (TypeError, ValueError):
-            pass
-        # MACD crossover or band extreme is a technical trigger.
-        if t.get("macd_bullish") is not None:
-            return True
-        bb_pos = t.get("bb_position")
-        try:
-            if bb_pos is not None and (float(bb_pos) >= 0.95 or float(bb_pos) <= 0.05):
-                return True
-        except (TypeError, ValueError):
-            pass
-    return False
-
-
-def classify_signal_type(
-    *,
-    analysis_text: str,
-    key_catalyst: str,
-    one_line: str,
-    filings: list[Any] | None,
-    articles: list[Any] | None,
-    technicals: list[Any] | None,
-    anomaly_alerts: list[Any] | None,
-) -> str:
-    """Classify WHAT is driving the signal — transparent, no LLM.
-
-    Returns FUNDAMENTAL_SHIFT | MEDIA_NARRATIVE | TECHNICAL_ONLY.
-
-    The catalyst and one-line thesis explain the *reason* for the call, so
-    their keyword hits are weighted 3× the body text.  Real artifacts
-    (filings, technical extremes, article volume) add evidence boosts on
-    top of the text signal.
-    """
-    filings = filings or []
-    articles = articles or []
-    technicals = technicals or []
-    anomaly_alerts = anomaly_alerts or []
-
-    weighted_text = " ".join(
-        [
-            ((key_catalyst or "") + " ") * 3,
-            ((one_line or "") + " ") * 3,
-            (analysis_text or ""),
-        ]
-    ).lower()
-
-    def _count(keywords: tuple[str, ...]) -> int:
-        return sum(weighted_text.count(k) for k in keywords)
-
-    has_filings = len(filings) > 0
-    has_technical_signal = bool(anomaly_alerts) or _has_technical_extreme(technicals)
-    article_count = len(articles)
-
-    fundamental_score = _count(_FUNDAMENTAL_KEYWORDS) + (3 if has_filings else 0)
-    technical_score = _count(_TECHNICAL_KEYWORDS) + (3 if has_technical_signal else 0)
-    media_score = _count(_MEDIA_KEYWORDS) + (1 if article_count >= 5 else 0)
-
-    scores = {
-        "FUNDAMENTAL_SHIFT": fundamental_score,
-        "MEDIA_NARRATIVE": media_score,
-        "TECHNICAL_ONLY": technical_score,
-    }
-
-    best = max(scores, key=lambda k: scores[k])
-    if scores[best] == 0:
-        # No textual signal at all — fall back to whatever raw input exists.
-        if has_filings:
-            return "FUNDAMENTAL_SHIFT"
-        if article_count > 0:
-            return "MEDIA_NARRATIVE"
-        return "TECHNICAL_ONLY"
-
-    # Fundamental vs media tie: only call it fundamental if filings back it.
-    if (
-        fundamental_score == media_score
-        and fundamental_score >= technical_score
-    ):
-        return "FUNDAMENTAL_SHIFT" if has_filings else "MEDIA_NARRATIVE"
-
-    return best
-
-
 def _clean_line(line: str) -> str:
     return re.sub(r"\s+", " ", line.strip("# -*_`>\t ")).strip()
 
@@ -543,27 +413,6 @@ def from_pipeline_state(
     key_risk = extract_risk(text)
     sources = build_sources(getattr(state, "articles", []) or [])
     raw_confidence = float(getattr(state, "confidence_score", 0) or 0.0) / 10.0
-
-    filings = getattr(state, "filings", []) or []
-    articles = getattr(state, "articles", []) or []
-    technicals = getattr(state, "technicals", []) or []
-    anomaly_alerts = getattr(state, "anomaly_alerts", []) or []
-
-    signal_type = classify_signal_type(
-        analysis_text=text,
-        key_catalyst=key_catalyst,
-        one_line=one_line,
-        filings=filings,
-        articles=articles,
-        technicals=technicals,
-        anomaly_alerts=anomaly_alerts,
-    )
-
-    # Carry the "was conviction explicitly stated?" flag through the JSONB
-    # blob so the UI never presents the default-3 fallback as a real score.
-    raw_pipeline_state = build_raw_pipeline_state(state)
-    raw_pipeline_state["conviction_stated"] = conviction_was_stated(text)
-
     return SignalCardDraft(
         ticker=ticker,
         run_id=run_id,
@@ -581,7 +430,6 @@ def from_pipeline_state(
             key_risk=key_risk,
             sources=sources,
         ),
-        signal_type=signal_type,
         validation_score=normalize_validation_status(
             getattr(state, "validation_status", "")
         ),
@@ -592,5 +440,5 @@ def from_pipeline_state(
             "sector_id": getattr(state, "sector_id", ""),
             "sector_name": getattr(state, "sector_name", ""),
         },
-        raw_pipeline_state=raw_pipeline_state,
+        raw_pipeline_state=build_raw_pipeline_state(state),
     )

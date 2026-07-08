@@ -339,6 +339,28 @@ export function logout(): Promise<{ ok: boolean }> {
   return apiFetch("/auth/logout", { method: "POST" });
 }
 
+/** Result of the public email-only signup (request access) endpoint. */
+export interface SignupResult {
+  ok: boolean;
+  status: "invited" | "waitlist";
+  message: string;
+}
+
+/**
+ * Public: submit an email to request access (the Create Account page).
+ * Adds the email to the waitlist for an admin to approve. Does NOT create a
+ * session — the user must sign in after approval.
+ */
+export function requestSignup(body: {
+  email: string;
+  name?: string | null;
+}): Promise<SignupResult> {
+  return apiFetch("/auth/signup", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
 // ── Sectors ──────────────────────────────────────────────────────────────────
 
 export function fetchSectors(): Promise<Sector[]> {

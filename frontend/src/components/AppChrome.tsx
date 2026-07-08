@@ -18,7 +18,7 @@ import { AuthGate } from "@/components/AuthGate";
  * The login screen must look signed-out — no header showing an account and no
  * floating run docks bleeding through.
  */
-const BARE_ROUTES = ["/login"];
+const BARE_ROUTES = ["/login", "/signup"];
 
 function isBareRoute(pathname: string | null): boolean {
   if (!pathname) return false;

@@ -57,3 +57,20 @@ class AccessRequestSchema(BaseModel):
 
 class RoleUpdateRequest(BaseModel):
     role: Literal["user", "admin"]
+
+
+class SignupRequest(BaseModel):
+    """Body for the public signup (request access) endpoint.
+
+    A user types their email; we record it on the waitlist so an admin can
+    approve it. This is the email-only path — Google sign-in handles its own
+    email capture via the OAuth callback.
+    """
+
+    email: str = Field(min_length=3, max_length=254)
+    name: str | None = Field(default=None, max_length=120)
+
+    @field_validator("email")
+    @classmethod
+    def _email(cls, v: str) -> str:
+        return _validate_email(v)

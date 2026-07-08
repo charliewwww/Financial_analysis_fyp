@@ -35,6 +35,7 @@ from app.core.oauth import google_configured, oauth
 from app.db.engine import get_db
 from app.db.repositories import auth as auth_repo
 from app.db.repositories import users as user_repo
+from app.schemas.admin import SignupRequest
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -202,3 +203,35 @@ async def auth_dev_login() -> Response:
         key=SIGNED_OUT_COOKIE, domain=settings.cookie_domain or None, path="/"
     )
     return response
+
+
+@router.post("/signup", summary="Request access (email-only signup)")
+async def auth_signup(body: SignupRequest, db: DB) -> dict:
+    """
+    Public endpoint: a visitor types their email on the Create Account page.
+
+    We record the email on the waitlist (``access_requests``) so an admin can
+    approve it from the operator console. If the email is already on the
+    allow-list, we say so — no need to wait. This endpoint is intentionally
+    unauthenticated; it only adds to the waitlist, never creates a session.
+    """
+    email = body.email.lower().strip()
+
+    # Already invited? Tell them to just sign in.
+    if await auth_repo.is_allowed(db, email):
+        return {
+            "ok": True,
+            "status": "invited",
+            "message": "This email is already invited. Please sign in.",
+        }
+
+    # Already on the waitlist? Keep it pending and let them know.
+    await auth_repo.upsert_access_request(db, email=email, name=body.name)
+    return {
+        "ok": True,
+        "status": "waitlist",
+        "message": (
+            "Thanks! We've recorded your request. An administrator will review "
+            "it and you'll be able to sign in once approved."
+        ),
+    }

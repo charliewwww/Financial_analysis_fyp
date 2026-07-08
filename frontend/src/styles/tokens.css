@@ -241,4 +241,39 @@
   .bar-optical { background: var(--al-sector-optical); }
   .bar-bullish { background: var(--al-bullish); }
   .bar-bearish { background: var(--al-bearish); }
+
+  /* Inline term annotation — makes jargon words themselves interactive.
+     A dotted underline signals "hover me for an explanation." */
+  .al-term {
+    border-bottom: 1px dotted var(--al-on-surface-muted);
+    cursor: help;
+    font-weight: 600;
+    color: var(--al-on-surface);
+    transition: color 150ms ease, border-color 150ms ease;
+    background: none;
+    border-top: none;
+    border-left: none;
+    border-right: none;
+    padding: 0;
+    font-size: inherit;
+    line-height: inherit;
+  }
+  .al-term:hover,
+  .al-term:focus {
+    color: var(--al-gold);
+    border-bottom-color: var(--al-gold);
+    outline: none;
+  }
+  .al-term:focus-visible {
+    outline: 2px solid var(--al-gold);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  /* Ticker terms get monospace styling to signal "this is a stock symbol." */
+  .al-term-ticker {
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
 }

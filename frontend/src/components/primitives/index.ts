@@ -20,6 +20,9 @@ export type { MetricChipProps } from "./MetricChip";
 export { InfoHint } from "./InfoHint";
 export type { InfoHintProps } from "./InfoHint";
 
+export { Term } from "./Term";
+export type { TermProps } from "./Term";
+
 export { RingSVG } from "./RingSVG";
 export type { RingSVGProps } from "./RingSVG";
 

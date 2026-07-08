@@ -70,8 +70,8 @@ function LoginInner() {
           <div
             className="rounded-lg border border-border px-4 py-3 text-sm text-left"
           >
-            <strong>You&apos;re on the waitlist.</strong> MarketPulse is
-            invite-only right now. We&apos;ve recorded your request — you&apos;ll
+            <strong>You're on the waitlist.</strong> MarketPulse is
+            invite-only right now. We've recorded your request — you'll
             be able to sign in once an administrator approves your email.
           </div>
         )}
@@ -102,7 +102,7 @@ function LoginInner() {
               Continue in development mode
             </a>
             <p className="text-xs" style={{ color: "var(--al-on-surface-muted)" }}>
-              Google sign-in isn&apos;t configured, so this uses the local dev
+              Google sign-in isn't configured, so this uses the local dev
               account. Set it up before sharing the app.
             </p>
           </div>
@@ -111,7 +111,7 @@ function LoginInner() {
             className="text-sm"
             style={{ color: "var(--al-on-surface-muted)" }}
           >
-            Sign-in isn&apos;t configured yet. Please contact the administrator.
+            Sign-in isn't configured yet. Please contact the administrator.
           </div>
         )}
 
@@ -122,6 +122,20 @@ function LoginInner() {
           Access is by invitation only. By continuing you agree this is a
           research tool and not financial advice.
         </p>
+
+        <div
+          className="text-sm"
+          style={{ color: "var(--al-on-surface-muted)" }}
+        >
+          Don't have an account?{" "}
+          <a
+            href="/signup"
+            className="font-semibold underline underline-offset-4"
+            style={{ color: "var(--al-on-surface)" }}
+          >
+            Create one
+          </a>
+        </div>
       </div>
     </div>
   );

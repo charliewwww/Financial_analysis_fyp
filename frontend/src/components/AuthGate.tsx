@@ -7,7 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ApiError, fetchMe } from "@/lib/api";
 
 /** Route prefixes that never require authentication. */
-const PUBLIC_PREFIXES = ["/login"];
+const PUBLIC_PREFIXES = ["/login", "/signup"];
 
 function isPublicPath(pathname: string | null): boolean {
   if (!pathname) return false;
