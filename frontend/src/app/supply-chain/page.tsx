@@ -12,6 +12,7 @@ import {
   type SupplyChainFlow,
 } from "@/lib/api";
 import { Skeleton } from "@/components/ui/skeleton";
+import { SupplyChainGraph } from "@/components/SupplyChainGraph";
 import { ErrorState, EmptyState } from "@/components/StateMessage";
 import { MetricChip, Pill } from "@/components/primitives";
 import { cn } from "@/lib/utils";
@@ -303,74 +304,20 @@ function SupplyChainMap({
         <Workflow className="size-6" aria-hidden style={{ color: "var(--al-gold)" }} />
       </div>
 
-      <div className="overflow-x-auto pb-2">
-        <div
-          className="grid min-w-[760px] gap-3 lg:min-w-[980px]"
-          style={{ gridTemplateColumns: `repeat(${flowMap.layers.length}, minmax(150px, 1fr))` }}
-        >
-          {flowMap.layers.map((layer, index) => (
-            <div key={layer.name} className="rounded-xl border bg-background/45 p-3" style={{ borderColor: "var(--al-outline)" }}>
-              <div className="flex min-h-10 items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="h-1.5 w-10 rounded-full" style={{ background: layer.color }} />
-                  <div className="mt-2 text-xs font-semibold uppercase leading-4 tracking-wide">{layer.name}</div>
-                </div>
-                {index < flowMap.layers.length - 1 ? <ArrowRight className="size-4 shrink-0" aria-hidden style={{ color: "var(--al-on-surface-muted)" }} /> : null}
-              </div>
-
-              <div className="mt-4 space-y-2">
-                {layer.nodes.length ? layer.nodes.map((node) => {
-                  const isActive = node.id === activeTicker;
-                  const content = (
-                    <>
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <div className="truncate font-mono text-sm font-bold">{node.id}</div>
-                          <div className="mt-0.5 truncate text-xs" style={{ color: "var(--al-on-surface-muted)" }}>
-                            {node.company?.name ?? "External input"}
-                          </div>
-                        </div>
-                        {node.company ? <Pill variant={isActive ? "gold" : "gray"}>{isActive ? "active" : "company"}</Pill> : null}
-                      </div>
-                      <div className="mt-3 grid grid-cols-2 gap-2 text-[11px] tabular-nums" style={{ color: "var(--al-on-surface-muted)" }}>
-                        <span>{node.incoming} in</span>
-                        <span className="text-right">{node.outgoing} out</span>
-                      </div>
-                    </>
-                  );
-
-                  if (node.company) {
-                    return (
-                      <button
-                        key={node.id}
-                        type="button"
-                        onClick={() => onSelectCompany(node.id)}
-                        className={cn("w-full rounded-lg border p-3 text-left transition hover:-translate-y-0.5", isActive && "shadow-sm")}
-                        style={{
-                          borderColor: isActive ? "var(--al-gold)" : "var(--al-outline)",
-                          background: isActive ? "rgba(200,169,81,0.10)" : "transparent",
-                        }}
-                      >
-                        {content}
-                      </button>
-                    );
-                  }
-
-                  return (
-                    <div key={node.id} className="rounded-lg border border-dashed p-3" style={{ borderColor: "var(--al-outline)" }}>
-                      {content}
-                    </div>
-                  );
-                }) : (
-                  <div className="rounded-lg border border-dashed p-3 text-xs" style={{ borderColor: "var(--al-outline)", color: "var(--al-on-surface-muted)" }}>
-                    No mapped nodes.
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+      <SupplyChainGraph
+        layers={flowMap.layers.map((layer) => ({
+          name: layer.name,
+          color: layer.color,
+          nodes: layer.nodes.map((node) => ({
+            id: node.id,
+            name: node.company?.name ?? "External input",
+            hasCompany: Boolean(node.company),
+          })),
+        }))}
+        flows={chain.key_flows}
+        activeTicker={activeTicker}
+        onSelect={onSelectCompany}
+      />
 
       <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
         {flowMap.topFlows.map((flow) => (

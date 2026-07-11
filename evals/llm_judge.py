@@ -261,5 +261,22 @@ def _parse_judge_response(response: str) -> dict | None:
         return parsed
 
     except json.JSONDecodeError as e:
-        logger.warning("Failed to parse judge JSON: %s", e)
+        logger.warning("Failed to parse judge JSON: %s — trying regex fallback", e)
+        # Lenient fallback: pull each dimension's 1-5 score directly, even if a
+        # justification string broke strict JSON. Keeps the metric usable.
+        expected_dims = [
+            "reasoning_depth", "supply_chain_insight",
+            "evidence_grounding", "risk_awareness", "actionability",
+        ]
+        recovered: dict = {}
+        for dim in expected_dims:
+            m = re.search(rf'"{dim}"\s*:\s*\{{[^}}]*?"score"\s*:\s*([1-5])', json_str)
+            if not m:
+                m = re.search(rf'"{dim}"\s*:\s*([1-5])', json_str)
+            if m:
+                recovered[dim] = {"score": int(m.group(1)), "justification": ""}
+        if len(recovered) >= 3:
+            for dim in expected_dims:
+                recovered.setdefault(dim, {"score": 3, "justification": "Not parsed"})
+            return recovered
         return None

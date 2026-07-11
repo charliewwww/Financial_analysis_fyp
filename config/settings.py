@@ -21,7 +21,13 @@ OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 # ── LLM (Ollama — local production) ───────────────────────────────
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
 
-# ── Model Selection ───────────────────────────────────────────────
+# ── LLM (DeepSeek — official API, paid) ──────────────────
+# Two-tier routing: deepseek-v4-pro handles hard reasoning (analyze/validate),
+# deepseek-v4-flash handles light tasks (summarize/reflect). OpenAI-compatible.
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
+DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
+
+# ── Model Selection ─────────────────────────────────
 # GLM-4.7-Flash: fast, free on both OpenRouter and Ollama.
 # Same model on both providers — ensures identical behavior.
 if LLM_PROVIDER == "ollama":
@@ -29,6 +35,11 @@ if LLM_PROVIDER == "ollama":
     LLM_API_KEY = "ollama"  # Ollama doesn't need a real key
     REASONING_MODEL = os.getenv("REASONING_MODEL", "glm4")
     FAST_MODEL = os.getenv("FAST_MODEL", "glm4")
+elif LLM_PROVIDER == "deepseek":
+    LLM_BASE_URL = DEEPSEEK_BASE_URL
+    LLM_API_KEY = DEEPSEEK_API_KEY
+    REASONING_MODEL = os.getenv("REASONING_MODEL", "deepseek-v4-pro")
+    FAST_MODEL = os.getenv("FAST_MODEL", "deepseek-v4-flash")
 else:
     LLM_BASE_URL = OPENROUTER_BASE_URL
     LLM_API_KEY = OPENROUTER_API_KEY

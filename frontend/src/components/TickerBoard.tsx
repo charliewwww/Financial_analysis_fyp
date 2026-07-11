@@ -49,6 +49,7 @@ import {
 import { useOvernight, OVERNIGHT_DEFAULT_CYCLE_DELAY_MS } from "@/components/overnight/OvernightContext";
 import { sortAgents } from "@/lib/agent-catalog";
 import { useMarket, marketForTicker } from "@/lib/market-context";
+import { SectorPulse } from "@/components/SectorPulse";
 import {
   PIPELINE_STAGES,
   aggregatePipelineStageStates,
@@ -1026,9 +1027,6 @@ function AgentLane({
           <Clock className="size-3.5" aria-hidden />
           {formatAge(evaluation.ageHours)} old
         </div>
-        <Link href={`/signals/${card.id}`} className="inline-flex items-center gap-1 text-sm font-semibold hover:underline" style={{ color: "var(--al-gold)" }}>
-          Open evidence <ArrowRight className="size-4" aria-hidden />
-        </Link>
       </div>
     </article>
   );
@@ -1053,11 +1051,13 @@ function ProgressPanel({
   runs,
   activeRuns,
   isSyncing,
+  justCompleted = false,
 }: {
   runProgress: RunProgress;
   runs: PipelineRun[] | undefined;
   activeRuns: ActiveRunMeta[];
   isSyncing: boolean;
+  justCompleted?: boolean;
 }) {
   if (runProgress.total === 0) return null;
   const byRunId = new Map((runs ?? []).map((run) => [run.run_id, run] as const));
@@ -1071,7 +1071,12 @@ function ProgressPanel({
   const issueCount = Math.max(runProgress.failed, failedIssues.length);
 
   return (
-    <section className="al-glass space-y-4 p-4">
+    <section className={cn("al-glass space-y-4 p-4 transition-shadow duration-500", justCompleted && "ring-2 ring-emerald-400/70")}>
+      {justCompleted ? (
+        <div className="flex items-center gap-2 rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-100">
+          <span aria-hidden>✓</span> Analysis complete — results updated
+        </div>
+      ) : null}
       <div className="flex items-center justify-between gap-3">
         <div>
           <div className="al-eyebrow">Analysis progress</div>
@@ -1269,14 +1274,14 @@ function BoardControlPanel({
 }) {
   return (
     <div className="grid gap-4 rounded-xl border border-border bg-background/70 p-3 md:grid-cols-3">
-      <div className="space-y-2">
-        <div className="flex items-center gap-1.5 al-eyebrow">
+      <div className="space-y-2 rounded-xl border-2 p-2" style={{ borderColor: "var(--al-gold)", background: "color-mix(in srgb, var(--al-gold) 6%, transparent)" }}>
+        <div className="flex items-center gap-1.5 al-eyebrow" style={{ color: "var(--al-gold)" }}>
           <Cpu className="size-3.5" aria-hidden /> Model (next run)
         </div>
         <select
           value={selectedModel}
           onChange={(event) => onSelectModel(event.target.value)}
-          className="h-9 w-full rounded-lg border border-border bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring"
+          className="h-10 w-full rounded-lg border-2 border-border bg-background px-2 text-sm font-semibold outline-none focus:ring-2 focus:ring-ring"
           aria-label="Model for next run"
         >
           <option value="">
@@ -1588,6 +1593,32 @@ export function TickerBoard({ initialTicker }: { initialTicker?: string } = {}) 
     [progressRuns, trackedRuns.data]
   );
 
+  // Each ticker shows ONLY its own live progress: clear the tracked runs when
+  // the visible ticker changes so a prior ticker's run never bleeds through.
+  useEffect(() => {
+    setActiveRuns([]);
+  }, [visibleTicker]);
+
+  // Auto-refresh cards + flash a completion effect the moment a board run
+  // finishes. The signals query has no poll interval, so we invalidate it here
+  // on the running → done transition instead of waiting for a manual reload.
+  const [justCompleted, setJustCompleted] = useState(false);
+  const prevActiveRunsRef = useRef(0);
+  useEffect(() => {
+    const activeNow = runProgress.running + runProgress.pending;
+    if (prevActiveRunsRef.current > 0 && activeNow === 0 && runProgress.total > 0) {
+      queryClient.invalidateQueries({ queryKey: ["signals"] });
+      queryClient.invalidateQueries({ queryKey: ["runs"] });
+      setJustCompleted(true);
+    }
+    prevActiveRunsRef.current = activeNow;
+  }, [runProgress.running, runProgress.pending, runProgress.total, queryClient]);
+  useEffect(() => {
+    if (!justCompleted) return;
+    const timer = setTimeout(() => setJustCompleted(false), 4500);
+    return () => clearTimeout(timer);
+  }, [justCompleted]);
+
   const boardRun = useMutation({
     onMutate: () => {
       setActiveRuns([]);
@@ -1671,15 +1702,8 @@ export function TickerBoard({ initialTicker }: { initialTicker?: string } = {}) 
     : null;
   const boardLoading = agents.isLoading || signals.isLoading;
 
-  // First-run guide: show a guided onboarding instead of dead "Awaiting…"
-  // panels when a ticker has no published analysis and nothing is running.
-  const showFirstRunGuide =
-    !boardLoading &&
-    scope === "ticker" &&
-    liveCards.length === 0 &&
-    activeRunCount === 0 &&
-    !boardRun.isPending &&
-    progressRuns.length === 0;
+  // (First-run guide removed — empty decision panels now render greyed-out
+  // in place instead of a separate onboarding screen.)
 
   // ── My Favourites (watchlist) ──────────────────────────────────
   const favourites = useQuery({
@@ -1802,9 +1826,9 @@ export function TickerBoard({ initialTicker }: { initialTicker?: string } = {}) 
 
         <div className="flex w-full max-w-4xl flex-col gap-3 rounded-2xl border border-border bg-background/60 p-3">
           <div className="flex flex-wrap items-center gap-2">
-            <div className="inline-flex rounded-full border border-border p-1">
-              <button type="button" className={cn("rounded-full px-3 py-1 text-xs font-semibold", scope === "ticker" ? "bg-muted text-foreground" : "text-muted-foreground")} onClick={() => setScope("ticker")}>Ticker</button>
-              <button type="button" className={cn("rounded-full px-3 py-1 text-xs font-semibold", scope === "sector" ? "bg-muted text-foreground" : "text-muted-foreground")} onClick={() => setScope("sector")}>Sector</button>
+            <div className="inline-flex rounded-full border-2 p-1" style={{ borderColor: "var(--al-gold)" }}>
+              <button type="button" className={cn("rounded-full px-4 py-1.5 text-sm font-semibold transition-colors", scope === "ticker" ? "al-gold-gradient text-white" : "text-muted-foreground hover:text-foreground")} onClick={() => setScope("ticker")}>Ticker</button>
+              <button type="button" className={cn("rounded-full px-4 py-1.5 text-sm font-semibold transition-colors", scope === "sector" ? "al-gold-gradient text-white" : "text-muted-foreground hover:text-foreground")} onClick={() => setScope("sector")}>Sector</button>
             </div>
             <ModeSwitch mode={decisionMode} setMode={setDecisionMode} recommendationAllowed={trust.recommendationAllowed} />
           </div>
@@ -1822,15 +1846,19 @@ export function TickerBoard({ initialTicker }: { initialTicker?: string } = {}) 
 
           <div className="flex w-full flex-col gap-2 min-[560px]:flex-row min-[560px]:items-center">
             <form onSubmit={submit} className="flex min-w-0 flex-1 flex-col gap-2 min-[560px]:flex-row">
-              <input
-                value={draftTicker}
-                onChange={(event) => setDraftTicker(event.target.value)}
-                className="h-10 min-w-0 flex-1 rounded-lg border border-border bg-background px-3 font-mono text-sm outline-none focus:ring-2 focus:ring-ring"
-                aria-label="Ticker"
-                placeholder="NVDA"
-                disabled={scope === "sector"}
-              />
-              {scope === "sector" ? (
+              {scope === "ticker" ? (
+                <div className="relative min-w-0 flex-1">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2" style={{ color: "var(--al-gold)" }} aria-hidden />
+                  <input
+                    value={draftTicker}
+                    onChange={(event) => setDraftTicker(event.target.value)}
+                    className="h-11 w-full rounded-xl border-2 bg-background pl-9 pr-3 font-mono text-base font-semibold outline-none focus:ring-2 focus:ring-ring"
+                    style={{ borderColor: "var(--al-gold)" }}
+                    aria-label="Search any ticker"
+                    placeholder="Search any ticker — e.g. NVDA"
+                  />
+                </div>
+              ) : (
                 <select
                   value={selectedSector?.id ?? ""}
                   onChange={(event) => {
@@ -1839,27 +1867,18 @@ export function TickerBoard({ initialTicker }: { initialTicker?: string } = {}) 
                     setSelectedSectorId(nextSectorId);
                     setSectorFocusTicker(pickFocusTicker(nextSector));
                   }}
-                  className="h-10 min-w-0 flex-1 rounded-lg border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+                  className="h-11 min-w-0 flex-1 rounded-xl border-2 bg-background px-3 text-base font-semibold outline-none focus:ring-2 focus:ring-ring"
+                  style={{ borderColor: "var(--al-gold)" }}
                   aria-label="Sector"
                 >
                   {catalogSectors.map((sector) => <option key={sector.id} value={sector.id}>{sector.name}</option>)}
                 </select>
-              ) : null}
-              <Button type="submit" className="al-gold-gradient self-start rounded-full px-4 min-[560px]:self-auto">
+              )}
+              <Button type="submit" className="al-gold-gradient h-11 self-start rounded-full px-4 min-[560px]:self-auto">
                 <Search data-icon="inline-start" className="size-4" aria-hidden />
                 {scope === "ticker" ? "View" : "Focus"}
               </Button>
             </form>
-            <Button
-              type="button"
-              variant="outline"
-              className="self-start rounded-full px-4 min-[560px]:self-auto"
-              onClick={runBoard}
-              disabled={boardRun.isPending || agents.isLoading || !agentItems.length || (scope === "sector" && !selectedSector?.constituents?.length)}
-            >
-              <Users data-icon="inline-start" className="size-4" aria-hidden />
-              {boardRun.isPending ? "Launching" : scope === "ticker" ? "Run board" : "Run sector"}
-            </Button>
             {scope === "ticker" ? (
               <Button
                 type="button"
@@ -1881,6 +1900,20 @@ export function TickerBoard({ initialTicker }: { initialTicker?: string } = {}) 
           </div>
         </div>
       </header>
+
+      <Button
+        type="button"
+        onClick={runBoard}
+        disabled={boardRun.isPending || agents.isLoading || !agentItems.length || (scope === "sector" && !selectedSector?.constituents?.length)}
+        className="al-gold-gradient h-14 w-full rounded-2xl text-base font-semibold"
+      >
+        <Activity data-icon="inline-start" className="size-5" aria-hidden />
+        {boardRun.isPending
+          ? "Launching the analysis…"
+          : scope === "ticker"
+            ? `▶ Run board on ${normalizeTicker(visibleTicker) || "this ticker"}`
+            : `▶ Run sector synthesis for ${selectedSector?.name ?? "the selected sector"}`}
+      </Button>
 
       {isOutOfCoverage ? (
         <section
@@ -2055,103 +2088,130 @@ export function TickerBoard({ initialTicker }: { initialTicker?: string } = {}) 
         </div>
       )}
 
-      <ProgressPanel runProgress={runProgress} runs={trackedRuns.data} activeRuns={progressRuns} isSyncing={trackedRuns.isFetching} />
+      {/* 1 — Posture / evidence / trust / run-queue: per-ticker, ticker mode only */}
+      {scope === "ticker" ? (
+        <section className={cn("grid gap-3 md:grid-cols-4", liveCards.length === 0 && "opacity-45 grayscale transition-opacity")}>
+          <MetricChip label="Posture" value={consensusLabel(trust.posture)} sub={trust.analystAgreement.detail} className="min-w-full" hint="The board's overall lean — bullish, bearish or neutral — based on how the analysts line up. It is not a recommendation on its own." />
+          <MetricChip label="Avg evidence score" value={averageConfidence == null ? "-" : `${averageConfidence}%`} sub="source/validation weighted" className="min-w-full" hint="Average strength of the analysts' evidence, weighted by how well claims were sourced and passed validation. Higher means better-backed, not 'more bullish'." />
+          <MetricChip label="Trust score" value={`${trust.evidenceScore}%`} sub={trust.evidenceQuality} className="min-w-full" hint="How much weight to put on this read right now: a blend of analyst agreement, data freshness and how many claims checked out against real numbers." />
+          <div className="al-glass flex items-center justify-between gap-3 p-4">
+            <div>
+              <div className="al-eyebrow">Run queue</div>
+              <div className="mt-1 text-sm font-semibold">
+                {runs.isError ? "Offline" : activeRunCount ? `${activeRunCount} active` : `${recentRuns.length} recent`}
+              </div>
+            </div>
+            <Pill variant={runs.isError ? "amber" : activeRunCount ? "gold" : TRUST_VARIANT[trust.state]}>
+              <Activity className="size-3" aria-hidden />
+              {runs.isError ? "api issue" : activeRunCount ? "running" : trust.stateLabel}
+            </Pill>
+          </div>
+        </section>
+      ) : null}
 
-      <LatestRunNotice runs={recentRuns} totalAgents={agentItems.length} />
+      {/* 2 — Analysis progress (pinned on top). Analyst lanes show in ticker mode only. */}
+      <section className="space-y-4">
+        <ProgressPanel runProgress={runProgress} runs={trackedRuns.data} activeRuns={progressRuns} isSyncing={trackedRuns.isFetching} justCompleted={justCompleted} />
 
-      {boardRun.isSuccess ? (
-        <section className="al-glass flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <LatestRunNotice runs={recentRuns} totalAgents={agentItems.length} />
+
+        {boardRun.isSuccess ? (
+          <section className="al-glass flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="al-eyebrow">Board run</div>
+              <p className="text-sm font-semibold">
+                {scope === "ticker"
+                  ? `Launched ${boardRun.data.reduce((sum, item) => sum + item.runs.length, 0)} analyst runs for ${boardRun.data[0]?.ticker ?? visibleTicker}.`
+                  : `Launched a sector synthesis for ${selectedSector?.name ?? "the selected sector"} — track it in the progress dock.`}
+              </p>
+            </div>
+            <Pill variant="green">queued</Pill>
+          </section>
+        ) : null}
+
+        {boardRun.isError ? (
+          <section className="al-glass flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="al-eyebrow">Board run</div>
+              <p className="text-sm font-semibold">{boardRun.error instanceof Error ? boardRun.error.message : "Could not launch board run."}</p>
+            </div>
+            <Pill variant="amber">not launched</Pill>
+          </section>
+        ) : null}
+
+        {scope === "ticker" ? (
+          <>
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <div className="al-eyebrow">Analyst lanes</div>
+                <h2 className="mt-1 text-xl">{agentItems.length} specialist lenses</h2>
+              </div>
+              <Link href="/agents" className="inline-flex items-center gap-1 text-sm font-semibold hover:underline" style={{ color: "var(--al-gold)" }}>
+                Manage agents <ArrowRight className="size-4" aria-hidden />
+              </Link>
+            </div>
+            <div className="grid gap-4 lg:grid-cols-2">
+              {agentItems.map((agent) => (
+                <AgentLane
+                  key={agent.id}
+                  agent={agent}
+                  card={byAgent.get(agent.id)}
+                  latestRun={runsByAgent.get(agent.id)}
+                  ticker={visibleTicker}
+                  loading={agents.isLoading || signals.isLoading}
+                  enabled={!disabledAgentIds.has(agent.id)}
+                  onToggleEnabled={() => toggleAgent(agent.id)}
+                />
+              ))}
+            </div>
+          </>
+        ) : null}
+      </section>
+
+      {/* Sector overview — sector mode only (the Sectors page, embedded here) */}
+      {scope === "sector" ? (
+        <section className="space-y-3">
           <div>
-            <div className="al-eyebrow">Board run</div>
-            <p className="text-sm font-semibold">
-              {scope === "ticker"
-                ? `Launched ${boardRun.data.reduce((sum, item) => sum + item.runs.length, 0)} analyst runs for ${boardRun.data[0]?.ticker ?? visibleTicker}.`
-                : `Launched a sector synthesis for ${selectedSector?.name ?? "the selected sector"} — track it in the progress dock.`}
+            <div className="al-eyebrow">Sector overview</div>
+            <h2 className="mt-1 text-xl">Market structure · {selectedSector?.name ?? "sectors"}</h2>
+            <p className="mt-1 max-w-3xl text-sm leading-6" style={{ color: "var(--al-on-surface-muted)" }}>
+              Press <span className="font-semibold text-foreground">Run sector synthesis</span> above for a multi-agent read (macro → dominant trend → second- and third-order effects). Below is the live market-structure snapshot across sectors.
             </p>
           </div>
-          <Pill variant="green">queued</Pill>
+          <SectorPulse />
         </section>
       ) : null}
 
-      {boardRun.isError ? (
-        <section className="al-glass flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <div className="al-eyebrow">Board run</div>
-            <p className="text-sm font-semibold">{boardRun.error instanceof Error ? boardRun.error.message : "Could not launch board run."}</p>
-          </div>
-          <Pill variant="amber">not launched</Pill>
-        </section>
-      ) : null}
-
-      {boardLoading ? (
-        <DecisionDeskLoading />
-      ) : showFirstRunGuide ? (
-        <FirstRunGuide
-          ticker={visibleTicker}
-          market={market}
-          agentCount={agentItems.length}
-          onRun={runBoard}
-          isPending={boardRun.isPending}
-          disabled={boardRun.isPending || agents.isLoading || !agentItems.length}
-        />
-      ) : (
-        <>
-          <ChiefVerdictPanel ticker={visibleTicker} totalAgents={agentItems.length} />
-
-          <VerdictPanel ticker={visibleTicker} mode={decisionMode} setMode={setDecisionMode} trust={trust} liveCards={liveCards} totalAgents={agentItems.length} />
-
-          <section className="grid gap-3 md:grid-cols-4">
-            <MetricChip label="Posture" value={consensusLabel(trust.posture)} sub={trust.analystAgreement.detail} className="min-w-full" hint="The board's overall lean — bullish, bearish or neutral — based on how the analysts line up. It is not a recommendation on its own." />
-            <MetricChip label="Avg evidence score" value={averageConfidence == null ? "-" : `${averageConfidence}%`} sub="source/validation weighted" className="min-w-full" hint="Average strength of the analysts' evidence, weighted by how well claims were sourced and passed validation. Higher means better-backed, not 'more bullish'." />
-            <MetricChip label="Trust score" value={`${trust.evidenceScore}%`} sub={trust.evidenceQuality} className="min-w-full" hint="How much weight to put on this read right now: a blend of analyst agreement, data freshness and how many claims checked out against real numbers." />
-            <div className="al-glass flex items-center justify-between gap-3 p-4">
-              <div>
-                <div className="al-eyebrow">Run queue</div>
-                <div className="mt-1 text-sm font-semibold">
-                  {runs.isError ? "Offline" : activeRunCount ? `${activeRunCount} active` : `${recentRuns.length} recent`}
-                </div>
-              </div>
-              <Pill variant={runs.isError ? "amber" : activeRunCount ? "gold" : TRUST_VARIANT[trust.state]}>
-                <Activity className="size-3" aria-hidden />
-                {runs.isError ? "api issue" : activeRunCount ? "running" : trust.stateLabel}
-              </Pill>
+      {/* 3–6 — per-ticker decision panels: ticker mode only */}
+      {scope === "ticker" ? (
+        boardLoading ? (
+          <DecisionDeskLoading />
+        ) : (
+          <>
+            {/* 3 — Decision read */}
+            <div className={cn(liveCards.length === 0 && "opacity-45 grayscale transition-opacity")}>
+              <VerdictPanel ticker={visibleTicker} mode={decisionMode} setMode={setDecisionMode} trust={trust} liveCards={liveCards} totalAgents={agentItems.length} />
             </div>
-          </section>
 
-          <div className="grid gap-5 xl:grid-cols-[0.85fr_1.15fr]">
-            <TrustChecklist checks={trust.checks} />
-            <DecisionBrief cards={liveCards} mode={decisionMode} trust={trust} />
-          </div>
+            {/* 4 — Trust checklist (full width) */}
+            <div className={cn(liveCards.length === 0 && "opacity-45 grayscale transition-opacity")}>
+              <TrustChecklist checks={trust.checks} />
+            </div>
 
-          <MarketNewsPanel ticker={visibleTicker} cards={liveCards} />
-        </>
-      )}
+            {/* 5 — Decision brief (full width) */}
+            <div className={cn(liveCards.length === 0 && "opacity-45 grayscale transition-opacity")}>
+              <DecisionBrief cards={liveCards} mode={decisionMode} trust={trust} />
+            </div>
 
-      <section className="space-y-4">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <div className="al-eyebrow">Analyst board</div>
-            <h2 className="mt-1 text-xl">{agentItems.length} specialist lenses</h2>
-          </div>
-          <Link href="/agents" className="inline-flex items-center gap-1 text-sm font-semibold hover:underline" style={{ color: "var(--al-gold)" }}>
-            Manage agents <ArrowRight className="size-4" aria-hidden />
-          </Link>
-        </div>
-        <div className="grid gap-4 lg:grid-cols-2">
-          {agentItems.map((agent) => (
-            <AgentLane
-              key={agent.id}
-              agent={agent}
-              card={byAgent.get(agent.id)}
-              latestRun={runsByAgent.get(agent.id)}
-              ticker={visibleTicker}
-              loading={agents.isLoading || signals.isLoading}
-              enabled={!disabledAgentIds.has(agent.id)}
-              onToggleEnabled={() => toggleAgent(agent.id)}
-            />
-          ))}
-        </div>
-      </section>
+            <MarketNewsPanel ticker={visibleTicker} cards={liveCards} />
+
+            {/* 6 — Chief Strategist (last) */}
+            <div className={cn(liveCards.length === 0 && "opacity-45 grayscale transition-opacity")}>
+              <ChiefVerdictPanel ticker={visibleTicker} totalAgents={agentItems.length} />
+            </div>
+          </>
+        )
+      ) : null}
     </div>
   );
 }

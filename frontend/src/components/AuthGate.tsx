@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 
 import { ApiError, fetchMe } from "@/lib/api";
+import { Skeleton } from "@/components/ui/skeleton";
 
 /** Route prefixes that never require authentication. */
 const PUBLIC_PREFIXES = ["/login", "/signup"];
@@ -22,6 +23,31 @@ function Centered({ children }: { children: React.ReactNode }) {
       <div className="text-sm" style={{ color: "var(--al-on-surface-muted)" }}>
         {children}
       </div>
+    </div>
+  );
+}
+
+/**
+ * A generic page skeleton shown while we verify the session (and on first
+ * paint before data arrives). It mimics the common page shape—eyebrow +
+ * title + subtitle, a row of metric tiles, and a large content block—so a
+ * cold load reads as "content is coming" rather than a blank "Loading…".
+ */
+function AppSkeleton() {
+  return (
+    <div className="space-y-6" aria-busy="true" aria-label="Loading…">
+      <div className="space-y-3">
+        <Skeleton className="h-3.5 w-32" />
+        <Skeleton className="h-9 w-2/3 max-w-md" />
+        <Skeleton className="h-4 w-full max-w-xl" />
+      </div>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Skeleton className="h-20 rounded-2xl" />
+        <Skeleton className="h-20 rounded-2xl" />
+        <Skeleton className="h-20 rounded-2xl" />
+        <Skeleton className="h-20 rounded-2xl" />
+      </div>
+      <Skeleton className="h-80 w-full rounded-2xl" />
     </div>
   );
 }
@@ -61,7 +87,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   }, [isPublic, unauthenticated, router]);
 
   if (isPublic) return <>{children}</>;
-  if (isLoading) return <Centered>Loading…</Centered>;
+  if (isLoading) return <AppSkeleton />;
   if (unauthenticated) return <Centered>Redirecting to sign in…</Centered>;
   if (isError) {
     return (
@@ -70,6 +96,6 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       </Centered>
     );
   }
-  if (!data) return <Centered>Loading…</Centered>;
+  if (!data) return <AppSkeleton />;
   return <>{children}</>;
 }

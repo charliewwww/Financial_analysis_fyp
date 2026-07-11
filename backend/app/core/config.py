@@ -27,10 +27,12 @@ class Settings(BaseSettings):
     )
 
     # ── LLM Provider ──────────────────────────────────────────────
-    llm_provider: Literal["openrouter", "ollama"] = "openrouter"
+    llm_provider: Literal["openrouter", "ollama", "deepseek"] = "openrouter"
     openrouter_api_key: str = ""
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
     ollama_base_url: str = "http://localhost:11434/v1"
+    deepseek_api_key: str = ""
+    deepseek_base_url: str = "https://api.deepseek.com"
 
     # ── Model Selection ───────────────────────────────────────────
     reasoning_model: str = "google/gemma-4-31b-it"

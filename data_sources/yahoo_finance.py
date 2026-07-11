@@ -19,19 +19,32 @@ _YFINANCE_RETRIES = 2
 _YFINANCE_RETRY_DELAY = 1.0
 
 
-def get_stock_snapshot(ticker: str) -> dict:
+def get_stock_snapshot(ticker: str, as_of_date: str | None = None) -> dict:
     """
     Get a comprehensive snapshot of a stock for analysis.
     Includes automatic retry for transient yfinance failures.
+
+    When ``as_of_date`` (YYYY-MM-DD) is given, the snapshot is frozen to price
+    data on/before that date and current fundamentals are dropped, so the
+    result contains no lookahead (used by the point-in-time backtest).
     """
     last_err = None
     for attempt in range(_YFINANCE_RETRIES + 1):
         try:
             stock = yf.Ticker(ticker)
-            info = stock.info
 
-            # Get price history for change calculations
-            hist = stock.history(period="3mo")
+            if as_of_date:
+                # Point-in-time: only data up to and including the cutoff.
+                end = pd.Timestamp(as_of_date) + pd.Timedelta(days=1)
+                start = pd.Timestamp(as_of_date) - pd.Timedelta(days=120)
+                hist = stock.history(start=start.date().isoformat(), end=end.date().isoformat())
+                if not hist.empty:
+                    hist = hist[hist.index.date <= pd.Timestamp(as_of_date).date()]
+                info = {}  # drop current fundamentals to avoid lookahead
+            else:
+                info = stock.info
+                hist = stock.history(period="3mo")
+
             if hist.empty:
                 return {"ticker": ticker, "error": "No price data available"}
 
@@ -116,6 +129,25 @@ def get_price_history(ticker: str, period: str = "6mo") -> pd.DataFrame:
         return hist
     except Exception as e:
         logger.warning("Failed to get price history for %s: %s", ticker, e)
+        return pd.DataFrame()
+
+
+def get_price_history_as_of(ticker: str, as_of_date: str, lookback_days: int = 400) -> pd.DataFrame:
+    """
+    Point-in-time OHLCV history ending on/before ``as_of_date`` (YYYY-MM-DD).
+
+    Used by the backtest so indicators reflect only what was known at the
+    cutoff — no lookahead. Returns an empty DataFrame on failure.
+    """
+    try:
+        end = pd.Timestamp(as_of_date) + pd.Timedelta(days=1)
+        start = pd.Timestamp(as_of_date) - pd.Timedelta(days=lookback_days)
+        hist = yf.Ticker(ticker).history(start=start.date().isoformat(), end=end.date().isoformat())
+        if not hist.empty:
+            hist = hist[hist.index.date <= pd.Timestamp(as_of_date).date()]
+        return hist
+    except Exception as e:
+        logger.warning("Failed as-of price history for %s @ %s: %s", ticker, as_of_date, e)
         return pd.DataFrame()
 
 

@@ -180,6 +180,7 @@ def run_sector_analysis(
     max_fetch_retries: int = 1,
     max_validation_retries: int = 1,
     model_override: str = "",
+    as_of_date: str = "",
 ) -> dict:
     """
     Run the full LangGraph pipeline for ONE sector.
@@ -210,6 +211,7 @@ def run_sector_analysis(
             max_fetch_retries=max_fetch_retries,
             max_validation_retries=max_validation_retries,
             model_override=model_override,
+            as_of_date=as_of_date,
         )
         result = _state_to_result(state)
 
@@ -398,6 +400,7 @@ def _run_sector_graph(
     max_fetch_retries: int = 1,
     max_validation_retries: int = 1,
     model_override: str = "",
+    as_of_date: str = "",
 ) -> PipelineState:
     """
     Execute the LangGraph pipeline for a single sector.
@@ -414,6 +417,7 @@ def _run_sector_graph(
         state.agent_name = agent_name
     state.agent_identity = agent_identity
     state.model_override = model_override or ""
+    state.as_of_date = as_of_date or ""
     state.pipeline_status = "running"
     state.max_fetch_retries = max_fetch_retries
     state.max_validation_retries = max_validation_retries

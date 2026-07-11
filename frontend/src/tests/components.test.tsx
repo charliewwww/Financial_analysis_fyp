@@ -426,12 +426,12 @@ describe("AgentGallery", () => {
     fireEvent.change(screen.getByLabelText("Description"), {
       target: { value: "Tracks volatility and dealer positioning." },
     });
-    fireEvent.change(screen.getByLabelText("Skill instructions"), {
+    fireEvent.change(screen.getByLabelText("Agent instructions"), {
       target: {
         value: "Focus on options flow, implied volatility, dealer gamma, and positioning changes.",
       },
     });
-    fireEvent.click(screen.getByRole("button", { name: /create skill/i }));
+    fireEvent.click(screen.getByRole("button", { name: /create agent/i }));
 
     await waitFor(() => expect(api.createAgentSkill).toHaveBeenCalledWith({
       name: "Options Flow Analyst",
@@ -440,7 +440,7 @@ describe("AgentGallery", () => {
       skill_type: "domain",
       skill_content: "Focus on options flow, implied volatility, dealer gamma, and positioning changes.",
     }));
-    expect(await screen.findByText("Skill agent created. It will join the next board run.")).toBeInTheDocument();
+    expect(await screen.findByText("Agent created. It will join the next board run.")).toBeInTheDocument();
   });
 });
 

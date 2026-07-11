@@ -118,6 +118,7 @@ class PipelineState:
     agent_name: str = "Supply Chain Analyst"
     agent_identity: str = ""
     model_override: str = ""                # Per-run reasoning-model override (empty = use default)
+    as_of_date: str = ""                    # Point-in-time cutoff (YYYY-MM-DD) for backtest; "" = live
     run_id: str = ""                        # Unique identifier for this pipeline run
     created_at: str = ""                    # ISO timestamp when pipeline started
 

@@ -19,7 +19,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def compute_technicals(ticker: str) -> dict:
+def compute_technicals(ticker: str, as_of_date: str | None = None) -> dict:
     """
     Compute a full set of technical indicators for a stock.
 
@@ -27,8 +27,15 @@ def compute_technicals(ticker: str) -> dict:
     - Feed to the LLM as part of analysis context
     - Store in the database
     - Display in the UI
+
+    When ``as_of_date`` (YYYY-MM-DD) is given, indicators are computed only
+    from price history up to that date (point-in-time backtest, no lookahead).
     """
-    hist = get_price_history(ticker, period="1y")
+    if as_of_date:
+        from data_sources.yahoo_finance import get_price_history_as_of
+        hist = get_price_history_as_of(ticker, as_of_date, lookback_days=400)
+    else:
+        hist = get_price_history(ticker, period="1y")
 
     if hist.empty or len(hist) < 30:
         return {"ticker": ticker, "error": "Insufficient price history (need 30+ days)"}

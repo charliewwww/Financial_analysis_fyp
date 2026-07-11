@@ -135,7 +135,7 @@ export function AgentGallery() {
           <div className="flex items-center gap-3">
             <FilePenLine className="size-5" style={{ color: "var(--al-gold)" }} aria-hidden />
             <div>
-              <div className="al-section-title text-base">Skill editor</div>
+              <div className="al-section-title text-base">Agent maker</div>
               <p className="text-sm" style={{ color: "var(--al-on-surface-muted)" }}>
                 Create a custom analyst lane for the Decision Desk.
               </p>
@@ -166,7 +166,7 @@ export function AgentGallery() {
           </div>
 
           <div className="space-y-3">
-            <label className="block text-sm font-semibold" htmlFor="skill-content">Skill instructions</label>
+            <label className="block text-sm font-semibold" htmlFor="skill-content">Agent instructions</label>
             <textarea
               id="skill-content"
               value={skillContent}
@@ -176,11 +176,11 @@ export function AgentGallery() {
             />
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-xs" style={{ color: "var(--al-on-surface-muted)" }}>
-                {createSkill.isSuccess ? "Skill agent created. It will join the next board run." : "Minimum 40 characters."}
+                {createSkill.isSuccess ? "Agent created. It will join the next board run." : "Minimum 40 characters."}
               </p>
               <Button type="submit" variant="outline" className="self-start rounded-full px-4 sm:self-auto" disabled={!canCreate}>
                 <FilePenLine data-icon="inline-start" className="size-4" aria-hidden />
-                {createSkill.isPending ? "Creating" : "Create skill"}
+                {createSkill.isPending ? "Creating" : "Create agent"}
               </Button>
             </div>
             {createSkill.isError ? (

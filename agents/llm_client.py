@@ -229,6 +229,36 @@ def _forced_model() -> str | None:
     return creds.model if creds else None
 
 
+# ── Per-thread call instrumentation (used by the backtest) ────────
+# Lets a caller (a) inject provider-specific create() options such as
+# DeepSeek's {"thinking": {"type": "disabled"}} and (b) meter token usage
+# across a batch of calls. Both are thread-local and default to inert, so
+# normal pipeline / live runs are completely unaffected.
+_call_opts = threading.local()
+
+
+def set_call_extra_body(extra_body: dict | None) -> None:
+    _call_opts.extra_body = extra_body
+
+
+def get_call_extra_body() -> dict | None:
+    return getattr(_call_opts, "extra_body", None)
+
+
+def reset_token_meter() -> None:
+    _call_opts.prompt_tokens = 0
+    _call_opts.completion_tokens = 0
+
+
+def add_to_token_meter(prompt_tokens: int, completion_tokens: int) -> None:
+    _call_opts.prompt_tokens = getattr(_call_opts, "prompt_tokens", 0) + (prompt_tokens or 0)
+    _call_opts.completion_tokens = getattr(_call_opts, "completion_tokens", 0) + (completion_tokens or 0)
+
+
+def get_token_meter() -> tuple[int, int]:
+    return getattr(_call_opts, "prompt_tokens", 0), getattr(_call_opts, "completion_tokens", 0)
+
+
 
 # ── Retryable exceptions ──────────────────────────────────────────
 _RETRYABLE_ERRORS = (
@@ -398,14 +428,18 @@ def call_llm(
         _check_cancelled()  # bail out before making the API call
         try:
             logger.info("Calling %s...%s", model, f" (retry {attempt})" if attempt else "")
+            _create_kwargs = dict(
+                model=model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                **lf_kwargs,
+            )
+            _extra = get_call_extra_body()
+            if _extra:
+                _create_kwargs["extra_body"] = _extra
             with _llm_slot(model):
-                response = client.chat.completions.create(
-                    model=model,
-                    messages=messages,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                    **lf_kwargs,
-                )
+                response = client.chat.completions.create(**_create_kwargs)
             _check_cancelled()  # bail out if cancelled while waiting
             # Guard against None choices (some models / Langfuse wrapper)
             if not response.choices:
@@ -413,6 +447,7 @@ def call_llm(
             content = response.choices[0].message.content or ""
             # Log token usage if available
             if response.usage:
+                add_to_token_meter(response.usage.prompt_tokens, response.usage.completion_tokens)
                 reasoning = ""
                 if hasattr(response.usage, 'completion_tokens_details') and response.usage.completion_tokens_details:
                     rt = getattr(response.usage.completion_tokens_details, 'reasoning_tokens', 0)

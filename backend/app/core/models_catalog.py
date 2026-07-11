@@ -32,10 +32,17 @@ _OLLAMA_CURATED: list[tuple[str, str]] = [
     ("qwen2.5", "Qwen 2.5 (local)"),
 ]
 
+# DeepSeek's official API exposes only deepseek-v4-pro / deepseek-v4-flash,
+# which are already included via the configured reasoning/fast models. An
+# empty list avoids offering ids the official endpoint would reject.
+_DEEPSEEK_CURATED: list[tuple[str, str]] = []
+
 
 def _curated_for_provider(provider: str) -> list[tuple[str, str]]:
     if provider == "ollama":
         return _OLLAMA_CURATED
+    if provider == "deepseek":
+        return _DEEPSEEK_CURATED
     return _OPENROUTER_CURATED
 
 

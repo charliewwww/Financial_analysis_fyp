@@ -7,6 +7,32 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
+# High-precision markers that signal an attempt to override the system prompt
+# (prompt injection) rather than describe an analytical lens. Kept deliberately
+# narrow to minimise false positives; the prompt-assembly layer isolates the
+# persona as defence-in-depth.
+_INJECTION_MARKERS = (
+    "ignore previous instruction",
+    "ignore all previous",
+    "ignore the above",
+    "disregard previous",
+    "disregard the system",
+    "disregard all prior",
+    "override the system",
+    "reveal your system prompt",
+    "print your system prompt",
+    "show your system prompt",
+    "system prompt:",
+    "you are now",
+    "act as the system",
+    "<|im_start|>",
+    "<|im_end|>",
+    "<system>",
+    "</system>",
+    "begin system",
+)
+
+
 class AgentSummarySchema(BaseModel):
     """Public agent metadata shown in the agent gallery."""
 
@@ -53,7 +79,22 @@ class AgentCreateRequest(BaseModel):
     @field_validator("skill_content")
     @classmethod
     def _skill_content_required(cls, value: str) -> str:
-        cleaned = value.strip()
+        # Strip control + zero-width characters (defuse hidden-instruction
+        # tricks), keeping only newlines/tabs and printable text.
+        cleaned = "".join(
+            ch for ch in value
+            if ch in ("\n", "\t") or (32 <= ord(ch) != 0x7F)
+        )
+        for zw in ("\u200b", "\u200c", "\u200d", "\u200e", "\u202e", "\ufeff"):
+            cleaned = cleaned.replace(zw, "")
+        cleaned = cleaned.strip()
         if len(cleaned) < 40:
             raise ValueError("Skill content must be at least 40 characters.")
+        lowered = cleaned.lower()
+        if any(marker in lowered for marker in _INJECTION_MARKERS):
+            raise ValueError(
+                "Agent instructions look like an attempt to override the system "
+                "(prompt injection). Describe the analytical lens and focus areas "
+                "instead."
+            )
         return cleaned
