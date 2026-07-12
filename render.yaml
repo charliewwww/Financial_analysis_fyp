@@ -25,7 +25,7 @@ services:
   - type: web
     name: fyp-2-api
     runtime: python
-    region: singapore              # match the database region below
+    region: hong-kong              # match the database region below
     plan: starter                  # 'free' sleeps + 512MB may OOM the pipeline;
                                     # upgrade to 'standard' (2GB) for heavy runs.
     branch: main
@@ -88,5 +88,5 @@ services:
 databases:
   - name: fyp-2-db
     plan: free                      # upgrade for persistence guarantees + size
-    region: singapore
+    region: hong-kong
     postgresMajorVersion: "16"
