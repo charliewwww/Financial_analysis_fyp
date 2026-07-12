@@ -79,7 +79,9 @@ services:
       - key: AUTH_BOOTSTRAP_ADMIN_EMAILS
         sync: false                 # your email → becomes the first admin
       - key: OPENROUTER_API_KEY
-        sync: false
+        sync: false                 # primary LLM provider
+      - key: DEEPSEEK_API_KEY
+        sync: false                 # optional: for LLM_PROVIDER=deepseek
       - key: FRED_API_KEY
         sync: false
       - key: SEC_EDGAR_EMAIL

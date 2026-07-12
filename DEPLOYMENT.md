@@ -95,7 +95,8 @@ the blueprint, so they are never committed to git):
 | `GOOGLE_CLIENT_ID` | your Google client ID |
 | `GOOGLE_CLIENT_SECRET` | your Google client secret |
 | `AUTH_BOOTSTRAP_ADMIN_EMAILS` | your email (becomes the first admin) |
-| `OPENROUTER_API_KEY` | your LLM key |
+| `OPENROUTER_API_KEY` | your OpenRouter key (default LLM provider) |
+| `DEEPSEEK_API_KEY` | your Deepseek key (optional: for switching to direct Deepseek) |
 | `FRED_API_KEY` | your FRED key (optional) |
 | `SEC_EDGAR_EMAIL` | a contact email for SEC EDGAR |
 
@@ -160,7 +161,9 @@ filled in the dashboard:
 | `PIPELINE_MAX_WORKERS` | blueprint | `4` (raise on bigger instances) |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | **you** | from Google |
 | `AUTH_BOOTSTRAP_ADMIN_EMAILS` | **you** | your email |
-| `OPENROUTER_API_KEY` / `FRED_API_KEY` / `SEC_EDGAR_EMAIL` | **you** | your keys |
+| `OPENROUTER_API_KEY` | **you** | your OpenRouter key (default) |
+| `DEEPSEEK_API_KEY` | **you** | your Deepseek key (optional) |
+| `FRED_API_KEY` / `SEC_EDGAR_EMAIL` | **you** | your keys |
 
 **Frontend (Cloudflare)** — build-time:
 
