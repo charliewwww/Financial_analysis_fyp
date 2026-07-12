@@ -49,6 +49,8 @@ services:
       # Keep the blocking pipeline thread pool small on modest instances.
       - key: PIPELINE_MAX_WORKERS
         value: "4"
+      - key: LLM_PROVIDER
+        value: deepseek
 
       # ── Database (injected from the managed Postgres below) ──────────────
       - key: DATABASE_URL
