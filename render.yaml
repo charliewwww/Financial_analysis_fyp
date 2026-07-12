@@ -26,8 +26,9 @@ services:
     name: fyp-2-api
     runtime: python
     region: singapore                   # match the database region below
-    plan: starter                  # 'free' sleeps + 512MB may OOM the pipeline;
-                                    # upgrade to 'standard' (2GB) for heavy runs.
+    plan: free                     # free: spins down after ~15 min idle + 512MB
+                                    # RAM (may OOM heavy runs). Upgrade to
+                                    # 'starter'/'standard' if the pipeline crashes.
     branch: main
     # Install root deps first, then backend deps so the backend's pinned
     # versions (e.g. langgraph) win the final resolution.
