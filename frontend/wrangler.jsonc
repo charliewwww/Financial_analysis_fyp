@@ -1,0 +1,27 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "main": ".open-next/worker.js",
+  "name": "fyp-2",
+  "compatibility_date": "2025-05-05",
+  "compatibility_flags": [
+    // Node.js API compatibility (required by @opennextjs/cloudflare)
+    "nodejs_compat",
+    // Allow the Worker to fetch fully-qualified public URLs (the backend API)
+    "global_fetch_strictly_public"
+  ],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "services": [
+    {
+      // Self-reference used by OpenNext for cache revalidation / ISR.
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "fyp-2"
+    }
+  ],
+  "images": {
+    // Cloudflare Images binding powering next/image optimisation.
+    "binding": "IMAGES"
+  }
+}

@@ -41,7 +41,6 @@ function GoogleIcon() {
 function LoginInner() {
   const params = useSearchParams();
   const error = params.get("error");
-  const status = params.get("status");
 
   const { data: cfg } = useQuery({
     queryKey: ["auth", "config"],
@@ -59,22 +58,12 @@ function LoginInner() {
         <div className="flex flex-col items-center gap-3">
           <BrandMark size={40} aria-hidden />
           <div>
-            <div className="al-eyebrow">Private beta</div>
+            <div className="al-eyebrow">Welcome back</div>
             <h1 className="text-2xl font-heading font-extrabold tracking-tight">
               Sign in to MarketPulse
             </h1>
           </div>
         </div>
-
-        {status === "waitlist" && (
-          <div
-            className="rounded-lg border border-border px-4 py-3 text-sm text-left"
-          >
-            <strong>You're on the waitlist.</strong> MarketPulse is
-            invite-only right now. We've recorded your request — you'll
-            be able to sign in once an administrator approves your email.
-          </div>
-        )}
 
         {error && (
           <div
@@ -119,8 +108,8 @@ function LoginInner() {
           className="text-xs"
           style={{ color: "var(--al-on-surface-muted)" }}
         >
-          Access is by invitation only. By continuing you agree this is a
-          research tool and not financial advice.
+          By continuing you agree this is a research tool and not financial
+          advice.
         </p>
 
         <div

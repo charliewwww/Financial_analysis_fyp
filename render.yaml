@@ -1,0 +1,92 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Render Blueprint — MarketPulse FastAPI backend + managed PostgreSQL.
+#
+# What this deploys:
+#   • A Python web service running the FastAPI API + the LangGraph pipeline.
+#   • A managed PostgreSQL database (the app's production store).
+#
+# How to use:
+#   1. Push this repo to GitHub.
+#   2. Render Dashboard → New → Blueprint → pick this repo → Apply.
+#   3. Fill the secrets marked "sync: false" in the dashboard (they are NOT
+#      stored in git): Google OAuth, LLM key, FRED key, SEC email, admin email.
+#   4. Add the custom domain fyp-2-api.charliewwww.com to the service.
+#
+# Notes:
+#   • The backend imports repo-root packages (config/, agents/, data_sources/,
+#     workflows/, …) AND the backend/ package, so PYTHONPATH must contain both,
+#     and BOTH requirements files are installed (backend pins applied last).
+#   • DATABASE_URL is injected from the managed DB; the app upgrades the scheme
+#     to postgresql+asyncpg:// automatically (see backend/app/db/engine.py).
+#   • Docs: https://render.com/docs/blueprint-spec
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  - type: web
+    name: fyp-2-api
+    runtime: python
+    region: singapore              # match the database region below
+    plan: starter                  # 'free' sleeps + 512MB may OOM the pipeline;
+                                    # upgrade to 'standard' (2GB) for heavy runs.
+    branch: main
+    # Install root deps first, then backend deps so the backend's pinned
+    # versions (e.g. langgraph) win the final resolution.
+    buildCommand: "pip install -r requirements.txt && pip install -r backend/requirements.txt"
+    # Run from inside backend/ (so the FastAPI `app` package wins over the repo's
+    # root app.py Streamlit entry) with the repo root on PYTHONPATH (so config/,
+    # agents/, data_sources/, workflows/ … resolve). `python -m` puts the CWD
+    # (backend/) first on sys.path.
+    startCommand: "cd backend && PYTHONPATH=.. python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      # ── Runtime ──────────────────────────────────────────────────────────
+      - key: APP_ENV
+        value: production
+      - key: PYTHON_VERSION
+        value: "3.12.0"
+      # Keep the blocking pipeline thread pool small on modest instances.
+      - key: PIPELINE_MAX_WORKERS
+        value: "4"
+
+      # ── Database (injected from the managed Postgres below) ──────────────
+      - key: DATABASE_URL
+        fromDatabase:
+          name: fyp-2-db
+          property: connectionString
+
+      # ── Sessions / cookies ───────────────────────────────────────────────
+      - key: SESSION_SECRET_KEY
+        generateValue: true         # Render generates a strong random secret
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: COOKIE_SAMESITE
+        value: lax                  # same-site works: app + api share charliewwww.com
+
+      # ── Public URLs (drive OAuth redirect + CORS) ────────────────────────
+      - key: BACKEND_BASE_URL
+        value: https://fyp-2-api.charliewwww.com
+      - key: FRONTEND_BASE_URL
+        value: https://fyp-2.charliewwww.com
+      - key: CORS_ORIGINS
+        value: '["https://fyp-2.charliewwww.com"]'
+
+      # ── Secrets — set these in the Render dashboard (never committed) ────
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: AUTH_BOOTSTRAP_ADMIN_EMAILS
+        sync: false                 # your email → becomes the first admin
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: FRED_API_KEY
+        sync: false
+      - key: SEC_EDGAR_EMAIL
+        sync: false
+
+databases:
+  - name: fyp-2-db
+    plan: free                      # upgrade for persistence guarantees + size
+    region: singapore
+    postgresMajorVersion: "16"

@@ -37,6 +37,22 @@ if TYPE_CHECKING:
 _engine: AsyncEngine | None = None
 
 
+def _normalize_async_db_url(url: str) -> str:
+    """Coerce a plain PostgreSQL URL to the asyncpg driver SQLAlchemy needs.
+
+    Managed hosts (Render, Railway, Heroku, …) hand out sync-style URLs like
+    ``postgres://…`` or ``postgresql://…``. SQLAlchemy's async engine requires an
+    explicit async driver, so upgrade the scheme to ``postgresql+asyncpg://``.
+    URLs that already name a driver (``postgresql+asyncpg://``) or use SQLite are
+    returned unchanged.
+    """
+    if url.startswith("postgres://"):
+        url = "postgresql://" + url[len("postgres://") :]
+    if url.startswith("postgresql://"):
+        url = "postgresql+asyncpg://" + url[len("postgresql://") :]
+    return url
+
+
 def init_engine() -> AsyncEngine:
     """
     Create the module-level AsyncEngine from settings.database_url.
@@ -48,7 +64,8 @@ def init_engine() -> AsyncEngine:
     StaticPool / NullPool; we omit them and let SQLAlchemy pick defaults.
     """
     global _engine
-    is_sqlite = settings.database_url.startswith("sqlite")
+    db_url = _normalize_async_db_url(settings.database_url)
+    is_sqlite = db_url.startswith("sqlite")
     kwargs: dict = {"echo": False}
     if not is_sqlite:
         kwargs.update(
@@ -56,7 +73,7 @@ def init_engine() -> AsyncEngine:
             max_overflow=10,
             pool_pre_ping=True,
         )
-    _engine = create_async_engine(settings.database_url, **kwargs)
+    _engine = create_async_engine(db_url, **kwargs)
     return _engine
 
 

@@ -4,16 +4,15 @@ Authentication routes — Google OIDC sign-in, sign-out, and a config probe.
 Flow:
     GET  /api/v1/auth/login     → redirect the browser to Google.
     GET  /api/v1/auth/callback  → Google returns here. We verify the identity,
-                                  enforce the private-beta invite list, create a
-                                  server-side session, set an HttpOnly cookie,
-                                  and redirect back to the frontend.
+                                  create a server-side session, set an HttpOnly
+                                  cookie, and redirect back to the frontend.
     POST /api/v1/auth/logout    → revoke the session and clear the cookie.
     GET  /api/v1/auth/config    → public: tells the login page whether Google
                                   sign-in is configured.
 
 Identity is delegated to Google; the *session* is ours (opaque token, stored
-hashed in user_sessions). Not-yet-invited users are recorded on the waitlist
-(access_requests) and bounced to a "request access" screen.
+hashed in user_sessions). Sign-in is open: anyone with a verified Google
+account gets in and receives their own private workspace.
 """
 
 from __future__ import annotations
@@ -122,21 +121,10 @@ async def auth_callback(request: Request, db: DB):
     name = userinfo.get("name")
     picture = userinfo.get("picture")
 
-    # ── Private-beta gate ─────────────────────────────────────────
-    is_bootstrap = email in settings.bootstrap_admin_emails
-    allowed = is_bootstrap or await auth_repo.is_allowed(db, email)
-    if not allowed:
-        await auth_repo.upsert_access_request(db, email=email, name=name)
-        return RedirectResponse(_frontend("/login", status="waitlist"))
-
-    # ── Resolve role (bootstrap list or invite entry) ─────────────
-    role: str | None = None
-    if is_bootstrap:
-        role = "admin"
-    else:
-        entry = await auth_repo.get_allow_entry(db, email)
-        if entry and entry.get("role") == "admin":
-            role = "admin"
+    # Open sign-in: any verified Google account is welcome and receives its own
+    # private workspace. Bootstrap-operator emails are granted admin; everyone
+    # else signs in as a normal user.
+    role: str | None = "admin" if email in settings.bootstrap_admin_emails else None
 
     await user_repo.record_login(
         db, email, role=role, picture=picture, username=name
@@ -205,33 +193,20 @@ async def auth_dev_login() -> Response:
     return response
 
 
-@router.post("/signup", summary="Request access (email-only signup)")
-async def auth_signup(body: SignupRequest, db: DB) -> dict:
+@router.post("/signup", summary="Sign up (open access)")
+async def auth_signup(body: SignupRequest) -> dict:
     """
-    Public endpoint: a visitor types their email on the Create Account page.
+    Kept for backwards compatibility with the Create Account page.
 
-    We record the email on the waitlist (``access_requests``) so an admin can
-    approve it from the operator console. If the email is already on the
-    allow-list, we say so — no need to wait. This endpoint is intentionally
-    unauthenticated; it only adds to the waitlist, never creates a session.
+    Sign-in is open — anyone with a verified Google account gets in and receives
+    their own private workspace — so there is no waitlist or approval step. We
+    simply direct the visitor to continue with Google.
     """
-    email = body.email.lower().strip()
-
-    # Already invited? Tell them to just sign in.
-    if await auth_repo.is_allowed(db, email):
-        return {
-            "ok": True,
-            "status": "invited",
-            "message": "This email is already invited. Please sign in.",
-        }
-
-    # Already on the waitlist? Keep it pending and let them know.
-    await auth_repo.upsert_access_request(db, email=email, name=body.name)
     return {
         "ok": True,
-        "status": "waitlist",
+        "status": "open",
         "message": (
-            "Thanks! We've recorded your request. An administrator will review "
-            "it and you'll be able to sign in once approved."
+            f"No approval needed for {body.email.strip().lower()} — "
+            "continue with Google to create your account."
         ),
     }
