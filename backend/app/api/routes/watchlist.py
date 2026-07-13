@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from app.core.auth import CurrentUser
@@ -61,10 +61,11 @@ async def add_to_watchlist(
     summary="Remove from favourites",
     description="Removes a ticker from the user's favourites.",
 )
-async def remove_from_watchlist(ticker: str, db: DB, user: CurrentUser) -> None:
+async def remove_from_watchlist(ticker: str, db: DB, user: CurrentUser) -> Response:
     removed = await watchlist_repo.remove(db, user, ticker)
     if not removed:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"'{ticker.upper()}' is not in your favourites.",
         )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
