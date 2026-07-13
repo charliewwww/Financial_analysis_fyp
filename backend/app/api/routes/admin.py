@@ -26,7 +26,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from app.core.auth import AdminUser
@@ -103,12 +103,11 @@ async def add_allowlist(
 
 
 @router.delete("/allowlist/{email}", status_code=status.HTTP_204_NO_CONTENT)
-async def remove_allowlist(email: str, db: DB, admin: AdminUser) -> Response:
+async def remove_allowlist(email: str, db: DB, admin: AdminUser) -> None:
     normalized = email.strip().lower()
     await auth_repo.remove_from_allowlist(db, normalized)
     # Revoking an invite kicks the user out of any active session immediately.
     await auth_repo.delete_user_sessions(db, normalized)
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 # ── Waitlist (access requests) ─────────────────────────────────────
