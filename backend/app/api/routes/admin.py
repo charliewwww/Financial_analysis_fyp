@@ -22,8 +22,6 @@ config — never trusted from the browser).
         POST   /api/v1/admin/users/{email}/reactivate
 """
 
-from __future__ import annotations
-
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query, status

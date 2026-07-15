@@ -10,8 +10,6 @@ Every row is scoped to the authenticated user's email, so one user never
 sees another's favourites.
 """
 
-from __future__ import annotations
-
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
