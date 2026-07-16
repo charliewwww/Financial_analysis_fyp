@@ -56,6 +56,11 @@ async def create_agent_skill(
 @router.delete(
     "/{agent_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    # This module uses ``from __future__ import annotations``, so the ``-> None``
+    # return annotation reaches FastAPI 0.115.x as the string "None", which it
+    # resolves to ``NoneType`` (truthy) and mistakes for a response body on a
+    # 204 route. Passing ``response_model=None`` explicitly skips that inference.
+    response_model=None,
     summary="Delete a custom agent",
 )
 async def delete_agent(agent_id: int, db: DB, user: CurrentUser) -> None:
