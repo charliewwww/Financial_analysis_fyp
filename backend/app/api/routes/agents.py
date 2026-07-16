@@ -19,9 +19,9 @@ DB = Annotated[AsyncConnection, Depends(get_db)]
 
 
 @router.get("", response_model=list[AgentSummarySchema], summary="List agents")
-async def list_agents(db: DB) -> list[AgentSummarySchema]:
-    """Return public metadata for built-in and user-created agents."""
-    return await agent_repo.list_agents(db)
+async def list_agents(db: DB, user: CurrentUser) -> list[AgentSummarySchema]:
+    """Return the built-in agents plus the caller's own custom agents."""
+    return await agent_repo.list_agents(db, user_email=user)
 
 
 @router.post(
@@ -33,7 +33,7 @@ async def list_agents(db: DB) -> list[AgentSummarySchema]:
 async def create_agent_skill(
     body: AgentCreateRequest,
     db: DB,
-    _user: CurrentUser,
+    user: CurrentUser,
 ) -> AgentSummarySchema:
     """Create a custom analyst agent from a user-authored domain skill."""
     try:
@@ -44,9 +44,29 @@ async def create_agent_skill(
             skill_name=body.skill_name,
             skill_type=body.skill_type,
             skill_content=body.skill_content,
+            user_email=user,
         )
     except IntegrityError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Agent {body.name!r} already exists.",
         ) from exc
+
+
+@router.delete(
+    "/{agent_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a custom agent",
+)
+async def delete_agent(agent_id: int, db: DB, user: CurrentUser) -> None:
+    """Delete one of the caller's own custom agents.
+
+    Built-in agents and agents owned by other users cannot be deleted; both
+    respond with 404 so an agent's existence is never revealed cross-user.
+    """
+    deleted = await agent_repo.delete_agent(db, agent_id, user_email=user)
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Custom agent not found.",
+        )

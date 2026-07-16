@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import insert, select, update
+from sqlalchemy import delete, insert, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from app.core.builtin_agents import BUILTIN_AGENTS, DEFAULT_AGENT_NAME
@@ -124,23 +124,37 @@ async def ensure_builtin_agents_for_engine(engine: AsyncEngine) -> None:
         await ensure_builtin_agents(db)
 
 
-async def list_agents(db: AsyncConnection) -> list[AgentSummarySchema]:
+async def list_agents(
+    db: AsyncConnection,
+    user_email: str | None = None,
+) -> list[AgentSummarySchema]:
     await ensure_builtin_agents(db)
-    rows = (
-        await db.execute(
-            select(*_agent_columns()).order_by(agents.c.is_builtin.desc(), agents.c.id.asc())
+    stmt = select(*_agent_columns())
+    if user_email is not None:
+        # Per-user isolation: only the shared built-ins plus this user's own
+        # custom agents.  Legacy orphan agents (no owner) stay hidden.
+        stmt = stmt.where(
+            or_(agents.c.is_builtin.is_(True), agents.c.user_email == user_email)
         )
-    ).mappings().all()
+    stmt = stmt.order_by(agents.c.is_builtin.desc(), agents.c.id.asc())
+    rows = (await db.execute(stmt)).mappings().all()
     return [_runtime_to_summary(_row_to_runtime(row)) for row in rows]
 
 
-async def get_agent(db: AsyncConnection, agent_id: int) -> AgentRuntimeSchema | None:
+async def get_agent(
+    db: AsyncConnection,
+    agent_id: int,
+    user_email: str | None = None,
+) -> AgentRuntimeSchema | None:
     await ensure_builtin_agents(db)
-    row = (
-        await db.execute(
-            select(*_agent_columns()).where(agents.c.id == agent_id)
+    stmt = select(*_agent_columns()).where(agents.c.id == agent_id)
+    if user_email is not None:
+        # Only resolve built-ins or agents the caller owns; other users'
+        # agents are treated as if they do not exist.
+        stmt = stmt.where(
+            or_(agents.c.is_builtin.is_(True), agents.c.user_email == user_email)
         )
-    ).mappings().first()
+    row = (await db.execute(stmt)).mappings().first()
     return await _row_to_runtime_with_skills(db, row) if row else None
 
 
@@ -162,8 +176,12 @@ async def create_agent_with_skill(
     skill_name: str | None,
     skill_type: str,
     skill_content: str,
+    user_email: str,
 ) -> AgentSummarySchema:
-    """Create a custom analyst agent and attach its first domain skill."""
+    """Create a custom analyst agent and attach its first domain skill.
+
+    The agent is owned by ``user_email`` and is visible only to that user.
+    """
 
     await ensure_builtin_agents(db)
     now = datetime.now(timezone.utc)
@@ -180,6 +198,7 @@ async def create_agent_with_skill(
                 description=description,
                 identity_layer=identity_layer,
                 is_builtin=False,
+                user_email=user_email,
                 created_at=now,
             )
             .returning(agents.c.id)
@@ -207,8 +226,42 @@ async def create_agent_with_skill(
 async def get_agent_for_run(
     db: AsyncConnection,
     agent_id: int | None,
+    user_email: str | None = None,
 ) -> AgentRuntimeSchema | None:
-    """Resolve an optional request agent id to the runtime agent config."""
+    """Resolve an optional request agent id to the runtime agent config.
+
+    When ``user_email`` is supplied, only built-in agents or agents owned by
+    that user resolve; another user's agent is treated as not found.
+    """
     if agent_id is None:
         return await get_default_agent(db)
-    return await get_agent(db, agent_id)
+    return await get_agent(db, agent_id, user_email=user_email)
+
+
+async def delete_agent(
+    db: AsyncConnection,
+    agent_id: int,
+    *,
+    user_email: str,
+) -> bool:
+    """Delete a user's own custom agent and its skills.
+
+    Returns ``True`` when a row was deleted.  Built-in agents and agents owned
+    by a different user are never deleted (and return ``False`` so the caller
+    can respond with 404 without revealing whether the agent exists).
+    """
+    await ensure_builtin_agents(db)
+    row = (
+        await db.execute(
+            select(agents.c.id, agents.c.is_builtin, agents.c.user_email).where(
+                agents.c.id == agent_id
+            )
+        )
+    ).mappings().first()
+
+    if row is None or row["is_builtin"] or row["user_email"] != user_email:
+        return False
+
+    await db.execute(delete(skills).where(skills.c.agent_id == agent_id))
+    await db.execute(delete(agents).where(agents.c.id == agent_id))
+    return True

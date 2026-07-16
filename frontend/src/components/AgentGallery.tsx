@@ -4,9 +4,9 @@ import Link from "next/link";
 import type { FormEvent } from "react";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, FilePenLine, PlayCircle } from "lucide-react";
+import { ArrowRight, FilePenLine, PlayCircle, Trash2 } from "lucide-react";
 
-import { createAgentSkill, fetchAgents } from "@/lib/api";
+import { createAgentSkill, deleteAgent, fetchAgents } from "@/lib/api";
 import { sortAgents } from "@/lib/agent-catalog";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -17,6 +17,7 @@ export function AgentGallery() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [skillContent, setSkillContent] = useState("");
+  const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
 
   const agents = useQuery({
     queryKey: ["agents"],
@@ -49,12 +50,30 @@ export function AgentGallery() {
     },
   });
 
+  const removeAgent = useMutation({
+    mutationFn: (agentId: number) => deleteAgent(agentId),
+    onSettled: () => {
+      setPendingDeleteId(null);
+      queryClient.invalidateQueries({ queryKey: ["agents"] });
+    },
+  });
+
   const canCreate = name.trim().length >= 3 && skillContent.trim().length >= 40 && !createSkill.isPending;
 
   function submitSkill(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!canCreate) return;
     createSkill.mutate();
+  }
+
+  function handleDelete(agentId: number, agentName: string) {
+    if (removeAgent.isPending) return;
+    const confirmed = window.confirm(
+      `Delete "${agentName}"? This removes your custom analyst and its skill. This can't be undone.`
+    );
+    if (!confirmed) return;
+    setPendingDeleteId(agentId);
+    removeAgent.mutate(agentId);
   }
 
   return (
@@ -117,18 +136,38 @@ export function AgentGallery() {
                 <span className="text-xs tabular-nums" style={{ color: "var(--al-on-surface-muted)" }}>
                   Agent #{agent.id}
                 </span>
-                <Link
-                  href={`/tickers`}
-                  className="inline-flex items-center gap-1 text-sm font-semibold hover:underline"
-                  style={{ color: "var(--al-gold)" }}
-                >
-                  Open board <ArrowRight className="size-4" aria-hidden />
-                </Link>
+                <div className="flex items-center gap-3">
+                  {!agent.is_builtin ? (
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(agent.id, agent.name)}
+                      disabled={removeAgent.isPending && pendingDeleteId === agent.id}
+                      className="inline-flex items-center gap-1 text-sm font-medium text-destructive hover:underline disabled:opacity-50"
+                      aria-label={`Delete ${agent.name}`}
+                    >
+                      <Trash2 className="size-4" aria-hidden />
+                      {removeAgent.isPending && pendingDeleteId === agent.id ? "Deleting" : "Delete"}
+                    </button>
+                  ) : null}
+                  <Link
+                    href={`/tickers`}
+                    className="inline-flex items-center gap-1 text-sm font-semibold hover:underline"
+                    style={{ color: "var(--al-gold)" }}
+                  >
+                    Open board <ArrowRight className="size-4" aria-hidden />
+                  </Link>
+                </div>
               </div>
             </article>
           ))}
         </div>
       )}
+
+      {removeAgent.isError ? (
+        <p role="alert" className="text-sm text-destructive">
+          {removeAgent.error instanceof Error ? removeAgent.error.message : "Could not delete agent."}
+        </p>
+      ) : null}
 
       <section className="al-glass p-5">
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">

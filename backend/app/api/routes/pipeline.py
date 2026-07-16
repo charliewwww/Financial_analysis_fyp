@@ -133,9 +133,10 @@ async def _ensure_llm_ready() -> None:
 async def _resolve_fanout_agents(
     db: AsyncConnection,
     agent_ids: list[int] | None,
+    user_email: str,
 ) -> list[AgentRuntimeSchema]:
     if agent_ids is None:
-        summaries = await agent_repo.list_agents(db)
+        summaries = await agent_repo.list_agents(db, user_email=user_email)
         agent_ids = [agent.id for agent in summaries]
 
     seen: set[int] = set()
@@ -144,7 +145,7 @@ async def _resolve_fanout_agents(
         if agent_id in seen:
             continue
         seen.add(agent_id)
-        agent = await agent_repo.get_agent(db, agent_id)
+        agent = await agent_repo.get_agent(db, agent_id, user_email=user_email)
         if agent is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -332,7 +333,7 @@ async def _launch_agent_fanout(
     ),
 )
 async def trigger_run(body: RunRequest, db: DB, user: CurrentUser) -> dict:
-    agent = await agent_repo.get_agent_for_run(db, body.agent_id)
+    agent = await agent_repo.get_agent_for_run(db, body.agent_id, user_email=user)
     if agent is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -402,7 +403,7 @@ async def trigger_run_fanout(
     # runner builds a lightweight on-the-fly config for it.
     sector_id = body.sector_id or _infer_sector_id(ticker) or "general"
 
-    agents = await _resolve_fanout_agents(db, body.agent_ids)
+    agents = await _resolve_fanout_agents(db, body.agent_ids, user)
     await _enforce_run_quota(db, user, additional=len(agents))
     model_override = _resolve_model_override(body.model, allow_custom=bool(body.api_key))
     if not body.dry_run:
@@ -440,7 +441,7 @@ async def trigger_sector_fanout(
     user: CurrentUser,
 ) -> list[RunFanoutResponse]:
     tickers = _sector_tickers(body.sector_id, body.tickers)
-    agents = await _resolve_fanout_agents(db, body.agent_ids)
+    agents = await _resolve_fanout_agents(db, body.agent_ids, user)
     await _enforce_run_quota(db, user, additional=len(tickers) * len(agents))
     model_override = _resolve_model_override(body.model, allow_custom=bool(body.api_key))
     if not body.dry_run:

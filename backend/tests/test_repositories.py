@@ -140,6 +140,7 @@ class TestAgentsRepository:
                 "Focus on options volume, implied volatility term structure, dealer gamma, "
                 "and whether positioning changes the risk/reward for the next market move."
             ),
+            user_email="owner@example.com",
         )
 
         assert agent.name == "Options Flow Analyst"
@@ -152,6 +153,87 @@ class TestAgentsRepository:
         assert runtime is not None
         assert "Options Flow Skill" in runtime.identity_layer
         assert "dealer gamma" in runtime.identity_layer
+
+    @pytest.mark.asyncio
+    async def test_list_agents_isolates_custom_agents_per_user(self, db):
+        await agent_repo.create_agent_with_skill(
+            db,
+            name="Alice Only Analyst",
+            description=None,
+            skill_name=None,
+            skill_type="domain",
+            skill_content="Focus on Alice-specific catalysts and idiosyncratic risk factors.",
+            user_email="alice@example.com",
+        )
+        await agent_repo.create_agent_with_skill(
+            db,
+            name="Bob Only Analyst",
+            description=None,
+            skill_name=None,
+            skill_type="domain",
+            skill_content="Focus on Bob-specific catalysts and idiosyncratic risk factors.",
+            user_email="bob@example.com",
+        )
+
+        alice_names = {a.name for a in await agent_repo.list_agents(db, user_email="alice@example.com")}
+        bob_names = {a.name for a in await agent_repo.list_agents(db, user_email="bob@example.com")}
+
+        # Built-ins are shared; custom agents are private to their owner.
+        assert "Supply Chain Analyst" in alice_names
+        assert "Supply Chain Analyst" in bob_names
+        assert "Alice Only Analyst" in alice_names
+        assert "Alice Only Analyst" not in bob_names
+        assert "Bob Only Analyst" in bob_names
+        assert "Bob Only Analyst" not in alice_names
+
+    @pytest.mark.asyncio
+    async def test_get_agent_hides_other_users_agents(self, db):
+        agent = await agent_repo.create_agent_with_skill(
+            db,
+            name="Private Analyst",
+            description=None,
+            skill_name=None,
+            skill_type="domain",
+            skill_content="A private analytical lens owned by a single user account only.",
+            user_email="owner@example.com",
+        )
+
+        assert await agent_repo.get_agent(db, agent.id, user_email="owner@example.com") is not None
+        assert await agent_repo.get_agent(db, agent.id, user_email="intruder@example.com") is None
+        # Built-ins remain resolvable for any user.
+        default = await agent_repo.get_default_agent(db)
+        assert await agent_repo.get_agent(db, default.id, user_email="intruder@example.com") is not None
+
+    @pytest.mark.asyncio
+    async def test_delete_agent_only_removes_own_custom_agent(self, db):
+        agent = await agent_repo.create_agent_with_skill(
+            db,
+            name="Disposable Analyst",
+            description=None,
+            skill_name=None,
+            skill_type="domain",
+            skill_content="A disposable analytical lens created purely for the delete test path.",
+            user_email="owner@example.com",
+        )
+
+        # Another user cannot delete it.
+        assert await agent_repo.delete_agent(db, agent.id, user_email="intruder@example.com") is False
+        assert await agent_repo.get_agent(db, agent.id) is not None
+
+        # A built-in agent cannot be deleted by anyone.
+        default = await agent_repo.get_default_agent(db)
+        assert await agent_repo.delete_agent(db, default.id, user_email="owner@example.com") is False
+
+        # The owner can delete it, and its skills are removed too.
+        assert await agent_repo.delete_agent(db, agent.id, user_email="owner@example.com") is True
+        assert await agent_repo.get_agent(db, agent.id) is None
+        skill_count = (
+            await db.execute(
+                text("SELECT COUNT(*) FROM skills WHERE agent_id = :agent_id"),
+                {"agent_id": agent.id},
+            )
+        ).scalar_one()
+        assert skill_count == 0
 
 
 # ══════════════════════════════════════════════════════════════════

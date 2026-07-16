@@ -278,6 +278,10 @@ export function createAgentSkill(body: AgentCreateRequest): Promise<AgentSummary
   });
 }
 
+export function deleteAgent(agentId: number): Promise<void> {
+  return apiFetch(`/agents/${agentId}`, { method: "DELETE" });
+}
+
 export function fetchRuns(
   params: ListRunsParams = {}
 ): Promise<PaginatedResponse<RunSummary>> {

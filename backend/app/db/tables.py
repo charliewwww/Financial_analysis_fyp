@@ -382,11 +382,18 @@ agents = Table(
     # Fixed Markdown — guardrails, compliance, output format. Cannot be edited by users.
     Column("identity_layer", Text),
     Column("is_builtin", Boolean, nullable=False, server_default="false"),
+    # Owner of a user-created agent.  NULL for shared, built-in agents.
+    # Enforces per-user isolation: a user only ever sees the built-ins plus
+    # the agents they created themselves.
+    Column("user_email", Text),
     Column("created_at", TIMESTAMP(timezone=True), nullable=False),
     Column("updated_at", TIMESTAMP(timezone=True)),
 
-    UniqueConstraint("name", name="uq_agents_name"),
+    # Names are unique *per owner* (built-ins share the NULL-owner namespace),
+    # so two different users may keep identically named custom agents.
+    UniqueConstraint("user_email", "name", name="uq_agents_owner_name"),
     Index("ix_agents_name", "name"),
+    Index("ix_agents_user_email", "user_email"),
 )
 
 
@@ -681,12 +688,14 @@ async def create_all_tables(engine) -> None:
             )""",
             """CREATE TABLE IF NOT EXISTS agents (
                 id             INTEGER PRIMARY KEY AUTOINCREMENT,
-                name           TEXT NOT NULL UNIQUE,
+                name           TEXT NOT NULL,
                 description    TEXT,
                 identity_layer TEXT,
                 is_builtin     INTEGER NOT NULL DEFAULT 0,
+                user_email     TEXT,
                 created_at     TEXT NOT NULL,
-                updated_at     TEXT
+                updated_at     TEXT,
+                UNIQUE(user_email, name)
             )""",
             """CREATE TABLE IF NOT EXISTS skills (
                 id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -762,6 +771,40 @@ async def create_all_tables(engine) -> None:
                 await conn.execute(text("ALTER TABLE user_details ADD COLUMN picture TEXT"))
             if "last_login_at" not in ud_cols:
                 await conn.execute(text("ALTER TABLE user_details ADD COLUMN last_login_at TEXT"))
+            # Idempotent per-user ownership column for agents (existing dev DBs).
+            agents_cols = {
+                row[1]
+                for row in (await conn.execute(text("PRAGMA table_info(agents)"))).all()
+            }
+            if "user_email" not in agents_cols:
+                await conn.execute(text("ALTER TABLE agents ADD COLUMN user_email TEXT"))
     else:
         async with engine.begin() as conn:
             await conn.run_sync(metadata.create_all, checkfirst=True)
+            # ── Idempotent migrations for pre-existing production tables ──
+            # Per-user ownership on agents (multi-tenant isolation). On a fresh
+            # database create_all already made the column + constraint, so every
+            # statement below is a no-op; on an upgraded database they add the
+            # column and swap the global unique(name) for unique(user_email, name)
+            # so two different users may keep identically named custom agents.
+            await conn.execute(
+                text("ALTER TABLE agents ADD COLUMN IF NOT EXISTS user_email TEXT")
+            )
+            await conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_agents_user_email "
+                    "ON agents (user_email)"
+                )
+            )
+            await conn.execute(
+                text("ALTER TABLE agents DROP CONSTRAINT IF EXISTS uq_agents_name")
+            )
+            await conn.execute(
+                text(
+                    "DO $$ BEGIN "
+                    "IF NOT EXISTS (SELECT 1 FROM pg_constraint "
+                    "WHERE conname = 'uq_agents_owner_name') "
+                    "THEN ALTER TABLE agents ADD CONSTRAINT uq_agents_owner_name "
+                    "UNIQUE (user_email, name); END IF; END $$;"
+                )
+            )

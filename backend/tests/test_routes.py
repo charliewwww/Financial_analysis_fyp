@@ -412,6 +412,36 @@ class TestAgentsEndpoints:
 
         assert resp.status_code == 409
 
+    def test_create_agent_skill_passes_owner(self, client):
+        agent = _agent_summary(id=7, name="Owned Analyst", is_builtin=False)
+        with patch("app.api.routes.agents.agent_repo.create_agent_with_skill", new_callable=AsyncMock) as m:
+            m.return_value = agent
+            resp = client.post(
+                "/api/v1/agents",
+                json={
+                    "name": "Owned Analyst",
+                    "skill_content": "Focus on options flow, implied volatility, dealer gamma, and positioning changes.",
+                },
+            )
+
+        assert resp.status_code == 201
+        assert m.await_args.kwargs["user_email"] == TEST_USER
+
+    def test_delete_agent_success(self, client):
+        with patch("app.api.routes.agents.agent_repo.delete_agent", new_callable=AsyncMock) as m:
+            m.return_value = True
+            resp = client.delete("/api/v1/agents/5")
+
+        assert resp.status_code == 204
+        assert m.await_args.kwargs["user_email"] == TEST_USER
+
+    def test_delete_agent_not_owned_returns_404(self, client):
+        with patch("app.api.routes.agents.agent_repo.delete_agent", new_callable=AsyncMock) as m:
+            m.return_value = False
+            resp = client.delete("/api/v1/agents/999")
+
+        assert resp.status_code == 404
+
 
 # ══════════════════════════════════════════════════════════════════
 # /api/v1/pipeline
@@ -518,7 +548,7 @@ class TestPipelineEndpoints:
             2: _agent_runtime(id=2, name="Value Analyst"),
         }
 
-        async def _get_agent(_db, agent_id):
+        async def _get_agent(_db, agent_id, **_kwargs):
             return runtimes[agent_id]
 
         with (
@@ -578,7 +608,7 @@ class TestPipelineEndpoints:
             2: _agent_runtime(id=2, name="Value Analyst"),
         }
 
-        async def _get_agent(_db, agent_id):
+        async def _get_agent(_db, agent_id, **_kwargs):
             return runtimes[agent_id]
 
         with (
@@ -616,7 +646,7 @@ class TestPipelineEndpoints:
             5: _agent_runtime(id=5, name="Options Flow Analyst", is_builtin=False),
         }
 
-        async def _get_agent(_db, agent_id):
+        async def _get_agent(_db, agent_id, **_kwargs):
             return runtimes[agent_id]
 
         with (

@@ -176,12 +176,14 @@ _DDL = [
     """
     CREATE TABLE IF NOT EXISTS agents (
         id             INTEGER PRIMARY KEY AUTOINCREMENT,
-        name           TEXT NOT NULL UNIQUE,
+        name           TEXT NOT NULL,
         description    TEXT,
         identity_layer TEXT,
         is_builtin     INTEGER NOT NULL DEFAULT 0,
+        user_email     TEXT,
         created_at     TEXT NOT NULL,
-        updated_at     TEXT
+        updated_at     TEXT,
+        UNIQUE(user_email, name)
     )
     """,
     """

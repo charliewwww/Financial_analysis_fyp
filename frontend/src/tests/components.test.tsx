@@ -18,6 +18,7 @@ import { OvernightProvider } from "@/components/overnight/OvernightContext";
 vi.mock("@/lib/api", () => ({
   askSignalEvidence: vi.fn(),
   createAgentSkill: vi.fn(),
+  deleteAgent: vi.fn(),
   fetchAgents: vi.fn(),
   fetchLatestSignal: vi.fn(),
   fetchChiefVerdict: vi.fn(),
@@ -441,6 +442,27 @@ describe("AgentGallery", () => {
       skill_content: "Focus on options flow, implied volatility, dealer gamma, and positioning changes.",
     }));
     expect(await screen.findByText("Agent created. It will join the next board run.")).toBeInTheDocument();
+  });
+
+  it("shows a delete control only for the user's own custom agents", async () => {
+    const api = await import("@/lib/api");
+    vi.mocked(api.fetchAgents).mockResolvedValue([
+      makeAgent({ id: 1, name: "Supply Chain Analyst", is_builtin: true }),
+      makeAgent({ id: 5, name: "My Custom Analyst", is_builtin: false }),
+    ]);
+    vi.mocked(api.deleteAgent).mockResolvedValue(undefined);
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    const { AgentGallery } = await import("@/components/AgentGallery");
+    renderWithQuery(<AgentGallery />);
+
+    // Built-in agents are not deletable; only the custom one exposes a delete control.
+    expect(await screen.findByLabelText("Delete My Custom Analyst")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Delete Supply Chain Analyst")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText("Delete My Custom Analyst"));
+
+    await waitFor(() => expect(api.deleteAgent).toHaveBeenCalledWith(5));
   });
 });
 
