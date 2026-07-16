@@ -4,9 +4,13 @@ Everything configurable lives here. Change model, thresholds, etc. in one place.
 """
 
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv()
+# Load .env from the repo root, regardless of CWD.
+# The systemd service runs from backend/ but .env lives one level up.
+_ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
+load_dotenv(_ENV_FILE)
 
 # ── LLM Provider Toggle ───────────────────────────────────────────
 # Set LLM_PROVIDER in .env to switch between cloud and local:
