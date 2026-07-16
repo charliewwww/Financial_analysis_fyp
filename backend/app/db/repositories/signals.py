@@ -89,6 +89,9 @@ def _row_to_signal_card(r: Any) -> SignalCardSchema:
     d["reasoning_scores"] = raw_state.get("reasoning_scores") or {}
     d["confidence_breakdown"] = raw_state.get("confidence_breakdown") or {}
     d["rag_metadata"] = raw_state.get("rag_metadata") or {}
+    d["llm_prompt_tokens"] = int(raw_state.get("total_llm_prompt_tokens") or 0)
+    d["llm_completion_tokens"] = int(raw_state.get("total_llm_completion_tokens") or 0)
+    d["llm_model"] = str(raw_state.get("llm_model") or "")
     # Legacy rows lack this flag → default True (treat their conviction as stated).
     d["conviction_stated"] = bool(raw_state.get("conviction_stated", True))
 

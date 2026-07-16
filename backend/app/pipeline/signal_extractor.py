@@ -351,6 +351,21 @@ def build_raw_pipeline_state(state: Any) -> dict[str, Any]:
     else:
         data = dict(getattr(state, "__dict__", {}) or {})
 
+    node_execs = data.get("node_executions") or []
+    # The model that did the bulk of the work is the one on the analyze node;
+    # fall back to any node's model, then to an explicit per-run override.
+    llm_model = ""
+    for node in node_execs:
+        if not isinstance(node, dict) or not node.get("llm_model"):
+            continue
+        if "analy" in str(node.get("node_name", "")).lower():
+            llm_model = str(node["llm_model"])
+            break
+        if not llm_model:
+            llm_model = str(node["llm_model"])
+    if not llm_model:
+        llm_model = str(data.get("model_override") or "")
+
     return {
         "analysis_text": data.get("analysis_text") or "",
         "news_summary": data.get("news_summary") or "",
@@ -371,6 +386,10 @@ def build_raw_pipeline_state(state: Any) -> dict[str, Any]:
         "confidence_breakdown": data.get("confidence_breakdown") or {},
         "confidence_score": data.get("confidence_score") or 0,
         "rag_metadata": data.get("rag_metadata") or {},
+        # Token accounting so the UI can show input/output usage and cost.
+        "total_llm_prompt_tokens": int(data.get("total_llm_prompt_tokens") or 0),
+        "total_llm_completion_tokens": int(data.get("total_llm_completion_tokens") or 0),
+        "llm_model": llm_model,
         "sector_id": data.get("sector_id") or "",
         "sector_name": data.get("sector_name") or "",
         "agent_id": data.get("agent_id"),

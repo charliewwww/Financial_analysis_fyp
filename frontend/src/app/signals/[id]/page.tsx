@@ -25,6 +25,12 @@ import { extractThesis, splitNamedSections } from "@/lib/parse-analysis";
 import { confidenceToTen, formatScore } from "@/lib/format";
 import { buildCitationResolver, linkifyCitations } from "@/lib/citations";
 import { sourceIdentity } from "@/lib/trust";
+import {
+  computeTokenUsage,
+  formatCostUsd,
+  formatTokens,
+  hasTokenUsage,
+} from "@/lib/token-cost";
 import type { Prediction, Signal, SignalCard } from "@/types/api";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -409,6 +415,7 @@ export default function SignalDetailPage() {
   const technicalRows = card.technical_snapshot ?? [];
   const priceRows = card.price_snapshot ?? [];
   const resolveCitation = resolverForCard(card);
+  const tokenUsage = computeTokenUsage(card);
 
   return (
     <div className="space-y-6">
@@ -469,6 +476,26 @@ export default function SignalDetailPage() {
                 .filter(Boolean)
                 .join(" · ") || undefined}
             />
+          ) : null}
+          {hasTokenUsage(tokenUsage) ? (
+            <>
+              <MetricChip
+                label="Token usage"
+                value={`${formatTokens(tokenUsage.totalTokens)} tokens`}
+                sub={`${formatTokens(tokenUsage.promptTokens)} in · ${formatTokens(tokenUsage.completionTokens)} out`}
+                hint="How many tokens this run sent to the model (input) and got back (output), summed across every pipeline step. Tokens are the unit LLM providers bill on, so this is what drives the run's cost."
+              />
+              <MetricChip
+                label="Est. cost"
+                value={formatCostUsd(tokenUsage.estimatedCostUsd)}
+                sub={tokenUsage.model ? tokenUsage.model : undefined}
+                hint={
+                  tokenUsage.estimatedCostUsd == null
+                    ? "This model isn't in our price table (or it's self-hosted), so only token counts are shown. If you use your own API key, check your provider's dashboard for the exact charge."
+                    : "A rough estimate of what this run cost, based on the model's published input/output token rates. Actual billing depends on your provider, caching and current prices — treat this as a guide, not an invoice."
+                }
+              />
+            </>
           ) : null}
         </div>
       </section>

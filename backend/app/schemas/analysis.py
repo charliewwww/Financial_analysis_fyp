@@ -239,6 +239,11 @@ class SignalCardSchema(BaseModel):
     confidence_breakdown: dict[str, Any] = Field(default_factory=dict)
     rag_metadata: dict[str, Any] = Field(default_factory=dict)
 
+    # ── LLM token usage (per run) — powers the cost estimate in the UI ──
+    llm_prompt_tokens: int = 0        # input tokens across all nodes
+    llm_completion_tokens: int = 0    # output tokens across all nodes
+    llm_model: str = ""               # model that did the bulk of the analysis
+
     # ── Metadata ──────────────────────────────────────────────────
     created_at: str = ""
     status: str = "active"

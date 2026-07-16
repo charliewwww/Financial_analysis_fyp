@@ -63,6 +63,9 @@ export interface SignalCard {
   reasoning_scores?: Record<string, unknown>;
   confidence_breakdown?: Record<string, unknown>;
   rag_metadata?: RagMetadata;
+  llm_prompt_tokens?: number;
+  llm_completion_tokens?: number;
+  llm_model?: string;
   created_at: string;
   status: string;
 }

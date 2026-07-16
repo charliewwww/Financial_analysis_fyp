@@ -9,6 +9,7 @@ import pytest
 from app.pipeline.signal_extractor import (
     SignalCardDraft,
     build_numerical_claims,
+    build_raw_pipeline_state,
     build_sources,
     extract_catalyst,
     extract_conviction,
@@ -235,6 +236,36 @@ def test_from_pipeline_state_full() -> None:
     assert draft.validation_score == "PASS"
     assert draft.sources[0]["domain"] == "x.com"
     assert draft.sector_context["sector_id"] == "ai_semiconductors"
+
+
+# ── build_raw_pipeline_state — token accounting ────────────────────
+
+
+def test_build_raw_pipeline_state_captures_token_usage() -> None:
+    state = SimpleNamespace(
+        analysis_text="Signal: BULLISH",
+        total_llm_prompt_tokens=15423,
+        total_llm_completion_tokens=5707,
+        model_override="",
+        node_executions=[
+            {"node_name": "fetch", "llm_model": None},
+            {"node_name": "summarize", "llm_model": "deepseek-v4-flash"},
+            {"node_name": "analyze", "llm_model": "deepseek-v4-pro"},
+        ],
+    )
+    raw = build_raw_pipeline_state(state)
+    assert raw["total_llm_prompt_tokens"] == 15423
+    assert raw["total_llm_completion_tokens"] == 5707
+    # The analyze node's model wins (it does the bulk of the work).
+    assert raw["llm_model"] == "deepseek-v4-pro"
+
+
+def test_build_raw_pipeline_state_defaults_when_no_tokens() -> None:
+    state = SimpleNamespace(analysis_text="x")
+    raw = build_raw_pipeline_state(state)
+    assert raw["total_llm_prompt_tokens"] == 0
+    assert raw["total_llm_completion_tokens"] == 0
+    assert raw["llm_model"] == ""
 
 
 def test_from_pipeline_state_handles_missing_fields() -> None:
