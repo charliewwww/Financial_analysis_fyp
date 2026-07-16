@@ -56,6 +56,131 @@ def _strip_json_fence(raw: str) -> str:
     return text
 
 
+def _extract_json_object(raw: str) -> dict:
+    """Best-effort parse of a JSON object from a model response.
+
+    Tolerant of the two failure modes we see in practice: a code fence or
+    leading prose before the object, and trailing text after it. Returns an
+    empty dict when nothing parseable is found (the caller then falls back to
+    a rule-based verdict).
+    """
+    if not raw:
+        return {}
+    text = _strip_json_fence(raw)
+    if not text:
+        return {}
+
+    # Fast path: the whole response is already valid JSON.
+    try:
+        parsed = json.loads(text)
+        return parsed if isinstance(parsed, dict) else {}
+    except json.JSONDecodeError:
+        pass
+
+    # Slow path: pull out the first balanced {...} block, ignoring any prose
+    # the model emitted around it (brace-aware, string/escape-aware).
+    start = text.find("{")
+    if start == -1:
+        return {}
+    depth = 0
+    in_str = False
+    esc = False
+    for i in range(start, len(text)):
+        ch = text[i]
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+        elif ch == '"':
+            in_str = True
+        elif ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                try:
+                    parsed = json.loads(text[start : i + 1])
+                    return parsed if isinstance(parsed, dict) else {}
+                except json.JSONDecodeError:
+                    return {}
+    return {}
+
+
+def _rule_based_verdict(
+    symbol: str,
+    analysts: list["ChiefVerdictAnalystView"],
+    generated_at: str,
+) -> "ChiefVerdictResponse":
+    """Deterministic house call used when the strategist LLM can't be parsed.
+
+    Weighs each analyst by conviction (a confident call counts for more than a
+    tentative one) and phrases the result in plain desk language — no internal
+    failure details leak to the user.
+    """
+    n = len(analysts)
+    bull = sum(1 for v in analysts if v.signal == "BULLISH")
+    bear = sum(1 for v in analysts if v.signal == "BEARISH")
+    neutral = n - bull - bear
+    bull_weight = sum(v.conviction or 3 for v in analysts if v.signal == "BULLISH")
+    bear_weight = sum(v.conviction or 3 for v in analysts if v.signal == "BEARISH")
+
+    if bull_weight > bear_weight:
+        action = "BUY"
+    elif bear_weight > bull_weight:
+        action = "SELL"
+    else:
+        action = "HOLD"
+
+    if bull and bear:
+        agreement = "split"
+    elif (bull == 0 or bear == 0) and n > 1:
+        agreement = "aligned"
+    else:
+        agreement = "mixed"
+
+    tally_parts: list[str] = []
+    if bull:
+        tally_parts.append(f"{bull} bullish")
+    if bear:
+        tally_parts.append(f"{bear} bearish")
+    if neutral:
+        tally_parts.append(f"{neutral} neutral")
+    tally = ", ".join(tally_parts) if tally_parts else f"{n} analyst{'s' if n != 1 else ''}"
+
+    if action == "HOLD":
+        deciding_reason = (
+            f"The bench is evenly balanced ({tally}), so the desk holds for a clearer catalyst."
+        )
+        conviction = 2
+    else:
+        lean = "bullish" if action == "BUY" else "bearish"
+        deciding_reason = f"The weight of the analyst bench leans {lean} ({tally})."
+        margin = abs(bull_weight - bear_weight)
+        conviction = max(1, min(5, 2 + round(margin / max(1, n))))
+
+    summary = (
+        f"Across {n} analyst{'s' if n != 1 else ''} the bench reads {tally}. "
+        f"The house call follows the weighted balance of their conviction."
+    )
+
+    return ChiefVerdictResponse(
+        ticker=symbol,
+        action=action,  # type: ignore[arg-type]
+        conviction=conviction,
+        deciding_reason=deciding_reason,
+        summary=summary,
+        agreement=agreement,  # type: ignore[arg-type]
+        dissent="",
+        risk_assessment="",
+        analysts=analysts,
+        generated_at=generated_at,
+    )
+
+
+
 def _normalize_action(value: Any) -> str:
     text = str(value or "").strip().upper()
     if text in {"BUY", "SELL", "HOLD"}:
@@ -194,12 +319,18 @@ async def generate_verdict(
             prompt,
             system_prompt,
             temperature=0.2,
-            max_tokens=800,
+            max_tokens=2000,
             langfuse_name="chief_strategist_verdict",
             langfuse_metadata={"ticker": symbol, "analysts": len(analysts)},
         )
-        parsed = json.loads(_strip_json_fence(raw))
-        data = parsed if isinstance(parsed, dict) else {}
+        data = _extract_json_object(raw)
+        if not data:
+            logger.warning(
+                "Chief Strategist verdict for %s: model response was not valid JSON "
+                "(%d chars) — using rule-based verdict.",
+                symbol,
+                len(raw or ""),
+            )
     except Exception as exc:  # pragma: no cover - deterministic fallback below
         logger.warning("Chief Strategist verdict fallback for %s: %s", symbol, exc)
         data = {}
@@ -221,31 +352,9 @@ async def generate_verdict(
             generated_at=generated_at,
         )
     else:
-        # Rule-based fallback so the desk never hard-fails.
-        bull = sum(1 for v in analysts if v.signal == "BULLISH")
-        bear = sum(1 for v in analysts if v.signal == "BEARISH")
-        action = "BUY" if bull > bear else "SELL" if bear > bull else "HOLD"
-        agreement = (
-            "aligned"
-            if (bull == 0 or bear == 0) and len(analysts) > 1
-            else "split"
-            if bull and bear
-            else "mixed"
-        )
-        verdict = ChiefVerdictResponse(
-            ticker=symbol,
-            action=action,  # type: ignore[arg-type]
-            conviction=3,
-            deciding_reason=(
-                "Computed from analyst majority (the strategist model was unavailable)."
-            ),
-            summary=f"{bull} bullish vs {bear} bearish across {len(analysts)} analysts.",
-            agreement=agreement,  # type: ignore[arg-type]
-            dissent="",
-            risk_assessment="",
-            analysts=analysts,
-            generated_at=generated_at,
-        )
+        # Rule-based fallback so the desk never hard-fails — phrased for users,
+        # with no mention of the underlying model/parse issue.
+        verdict = _rule_based_verdict(symbol, analysts, generated_at)
 
     if persist:
         price_at_verdict: float | None = None
