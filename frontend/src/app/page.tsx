@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
@@ -31,11 +31,11 @@ import {
   Term,
 } from "@/components/primitives";
 
-// ?? Constants ?????????????????????????????????????????????????????????????????
+// ── Constants ─────────────────────────────────────────────────────────────────
 
 const LANDING_DEMO_TICKER = "NVDA";
 
-// Covered names we steer beginners toward ??deepest supply-chain + filings coverage.
+// Covered names we steer beginners toward — deepest supply-chain + filings coverage.
 const STARTER_TICKERS = ["NVDA", "TSM", "AMD", "AVGO", "MSFT"] as const;
 
 const SIGNAL_VARIANT: Record<Signal, PillVariant> = {
@@ -44,7 +44,7 @@ const SIGNAL_VARIANT: Record<Signal, PillVariant> = {
   NEUTRAL: "gray",
 };
 
-// The six core features the product offers ??each card is a doorway.
+// The six core features the product offers — each card is a doorway.
 const FEATURES = [
   {
     icon: Sparkles,
@@ -53,7 +53,7 @@ const FEATURES = [
     href: "/tickers",
     tag: "Transparent",
     description:
-      "Pick a ticker and let multiple AI analysts debate. Get a Chief Verdict with conviction, catalyst, and risk ??gated by evidence.",
+      "Pick a ticker and let multiple AI analysts debate. Get a Chief Verdict with conviction, catalyst, and risk — gated by evidence.",
     cta: "Analyze a stock",
   },
   {
@@ -63,7 +63,7 @@ const FEATURES = [
     href: "/supply-chain",
     tag: "Our edge",
     description:
-      "See how companies connect ??who supplies whom ??and trace second-order reasoning from upstream chips to downstream cloud.",
+      "See how companies connect — who supplies whom — and trace second-order reasoning from upstream chips to downstream cloud.",
     cta: "Explore the map",
   },
   {
@@ -83,7 +83,7 @@ const FEATURES = [
     href: "/agents",
     tag: "Model choice",
     description:
-      "Meet the AI agents ??each looks at a stock through a different lens: value, momentum, supply chain, or risk.",
+      "Meet the AI agents — each looks at a stock through a different lens: value, momentum, supply chain, or risk.",
     cta: "Browse agents",
   },
   {
@@ -103,12 +103,12 @@ const FEATURES = [
     href: "/reports",
     tag: "Auditable",
     description:
-      "Full archive of past analyses ??each report includes news, filings, prices, technicals, and validation status.",
+      "Full archive of past analyses — each report includes news, filings, prices, technicals, and validation status.",
     cta: "Read reports",
   },
 ] as const;
 
-// ?? Helpers ???????????????????????????????????????????????????????????????????
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 
 function confidenceToTen(value: number | null | undefined): number | null {
@@ -123,7 +123,7 @@ function confidenceToPct(value: number | null | undefined): number | null {
 }
 
 
-// ?? Feature Card ??????????????????????????????????????????????????????????????
+// ── Feature Card ──────────────────────────────────────────────────────────────
 
 function FeatureCard({
   icon: Icon,
@@ -192,7 +192,7 @@ function FeatureGrid() {
   );
 }
 
-// ?? Live Data Cards ???????????????????????????????????????????????????????????
+// ── Live Data Cards ───────────────────────────────────────────────────────────
 
 function LiveSignalCard({ card }: { card: SignalCard }) {
   const pct = confidenceToPct(card.confidence) ?? 0;
@@ -252,7 +252,7 @@ function LiveSignalCard({ card }: { card: SignalCard }) {
       <div className="mt-4 flex flex-wrap gap-2">
         <MetricChip
           label="Conviction"
-          hint="How strongly the analyst believes in the call, on a 1?? scale."
+          hint="How strongly the analyst believes in the call, on a 1–5 scale."
           value={
             card.conviction_stated === false
               ? "not stated"
@@ -261,7 +261,7 @@ function LiveSignalCard({ card }: { card: SignalCard }) {
         />
         <MetricChip
           label="Evidence"
-          hint="A 0??00% score showing how well the analyst's claims are backed by real data."
+          hint="A 0–100% score showing how well the analyst's claims are backed by real data."
           value={`${pct}%`}
         />
         <MetricChip
@@ -290,7 +290,7 @@ function LiveSignalEmpty() {
       >
         This panel fills with a real{" "}
         <Term name="signal card">signal card</Term> the moment a ticker analysis
-        completes. Nothing is shown until then ??no sample data, no placeholders.
+        completes. Nothing is shown until then — no sample data, no placeholders.
       </p>
       <Link
         href="/tickers"
@@ -304,7 +304,7 @@ function LiveSignalEmpty() {
   );
 }
 
-// ?? Try it in 3 steps (beginner tutorial) ??????????????????????????????????????
+// ── Try it in 3 steps (beginner tutorial) ──────────────────────────────────────
 
 function StarterTickerChips() {
   return (
@@ -332,7 +332,7 @@ function TryInThreeSteps() {
   }> = [
     {
       icon: Search,
-      title: "1 繚 Pick a stock we cover",
+      title: "1 · Pick a stock we cover",
       body: (
         <>
           MarketPulse goes deepest on AI &amp; semiconductor names, where the{" "}
@@ -344,22 +344,22 @@ function TryInThreeSteps() {
     },
     {
       icon: Users,
-      title: "2 繚 Let the analysts debate",
+      title: "2 · Let the analysts debate",
       body: (
         <>
-          Four specialist AI <Term name="analyst">analysts</Term> ??value, momentum,
-          supply chain and risk ??study the same stock and can disagree. You see every
+          Four specialist AI <Term name="analyst">analysts</Term> — value, momentum,
+          supply chain and risk — study the same stock and can disagree. You see every
           side, not one black-box answer.
         </>
       ),
     },
     {
       icon: ShieldCheck,
-      title: "3 繚 Read the verdict, then check it",
+      title: "3 · Read the verdict, then check it",
       body: (
         <>
           Every claim shows its source and whether it was{" "}
-          <Term name="validation">verified</Term> against real market data ??so you trust
+          <Term name="validation">verified</Term> against real market data — so you trust
           the call because you can see the evidence.
         </>
       ),
@@ -392,14 +392,14 @@ function TryInThreeSteps() {
         <Clock className="size-4 shrink-0" aria-hidden style={{ color: "var(--al-gold)" }} />
         <span>
           Ready-made analyses open instantly. Running a fresh board yourself takes about
-          5 minutes ??the analysts read live news, filings and prices before they answer.
+          5 minutes — the analysts read live news, filings and prices before they answer.
         </span>
       </div>
     </section>
   );
 }
 
-// ?? How to read a signal (annotates the live example) ???????????????????????????
+// ── How to read a signal (annotates the live example) ───────────────────────────
 
 function HowToReadCard() {
   const rows: Array<{ icon: React.ElementType; label: string; text: React.ReactNode }> = [
@@ -409,7 +409,7 @@ function HowToReadCard() {
       text: (
         <>
           <Term name="BULLISH">Bullish</Term>, <Term name="BEARISH">bearish</Term> or{" "}
-          <Term name="NEUTRAL">neutral</Term>, plus a 1??{" "}
+          <Term name="NEUTRAL">neutral</Term>, plus a 1–5{" "}
           <Term name="conviction">conviction</Term> score for how strongly the analyst holds it.
         </>
       ),
@@ -438,7 +438,7 @@ function HowToReadCard() {
       text: (
         <>
           Whether each number was <Term name="validation">checked</Term> against real market
-          data. Weak or unverified claims are flagged ??never hidden.
+          data. Weak or unverified claims are flagged — never hidden.
         </>
       ),
     },
@@ -470,14 +470,14 @@ function HowToReadCard() {
   );
 }
 
-// ?? Hero ??????????????????????????????????????????????????????????????????????
+// ── Hero ──────────────────────────────────────────────────────────────────────
 
 function WhyTrust() {
   const pillars: Array<{ icon: React.ElementType; title: string; body: string }> = [
     {
       icon: Users,
       title: "Four analysts, not one black box",
-      body: "See each specialist's take ??value, momentum, supply chain and risk ??and exactly where they disagree.",
+      body: "See each specialist's take — value, momentum, supply chain and risk — and exactly where they disagree.",
     },
     {
       icon: ShieldCheck,
@@ -492,7 +492,7 @@ function WhyTrust() {
     {
       icon: Cpu,
       title: "Runs on any model",
-      body: "Choose the AI per run ??including a free, local one ??so you're never locked in or forced to pay.",
+      body: "Choose the AI per run — including a free, local one — so you're never locked in or forced to pay.",
     },
     {
       icon: CheckCircle2,
@@ -538,7 +538,7 @@ function Hero() {
       </div>
       <div className="space-y-4">
         <h1 className="max-w-3xl text-3xl md:text-5xl">
-          Understand any stock ??and check the AI&apos;s reasoning yourself.
+          Understand any stock — and check the AI&apos;s reasoning yourself.
         </h1>
         <p
           className="max-w-2xl text-base leading-7 md:text-lg"
@@ -546,7 +546,7 @@ function Hero() {
         >
           MarketPulse puts a board of specialist AI{" "}
           <Term name="analyst">analysts</Term> on a single stock, then shows the
-          evidence behind every call ??so you can trust it, not just take its word.
+          evidence behind every call — so you can trust it, not just take its word.
         </p>
       </div>
       <div className="flex flex-wrap gap-2">
@@ -567,7 +567,7 @@ function Hero() {
   );
 }
 
-// ?? Main Page ?????????????????????????????????????????????????????????????????
+// ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function HomePage() {
   // One live example so the landing page shows real substance, not placeholders.
@@ -585,7 +585,7 @@ export default function HomePage() {
       {/* Plain-language welcome + primary action */}
       <Hero />
 
-      {/* Strengths up front ??the reasons this can be trusted (kept concise) */}
+      {/* Strengths up front — the reasons this can be trusted (kept concise) */}
       <WhyTrust />
 
       {/* Beginner tutorial: guided path with scope-steering + run-time expectations */}
